@@ -5,7 +5,8 @@ const StudentRegistration = sequelize.define('StudentRegistration', {
   id: {
     type: DataTypes.INTEGER,
     primaryKey: true,
-    autoIncrement: true
+    autoIncrement: true,
+
   },
   name: {
     type: DataTypes.STRING,
@@ -54,6 +55,15 @@ const StudentRegistration = sequelize.define('StudentRegistration', {
   courseDuration: {
     type: DataTypes.STRING
   },
+  batch: {
+    type: DataTypes.STRING,
+    validate: {
+      isIn: {
+        args: [['9AM-11AM', '12PM-2PM','3PM-5PM', '6PM-8PM']],
+        msg: "Invalid payment mode"
+      }
+    }
+  },
   learningMode: {
     type: DataTypes.STRING
   },
@@ -80,7 +90,7 @@ const StudentRegistration = sequelize.define('StudentRegistration', {
     type: DataTypes.STRING,
     validate: {
       isIn: {
-        args: [['Cash', 'Credit Card','Debit Card', 'Online','Loan']],
+        args: [['cash', 'Credit Card','Debit Card', 'Online','Loan']],
         msg: "Invalid payment mode"
       }
     }
@@ -152,5 +162,6 @@ const StudentRegistration = sequelize.define('StudentRegistration', {
   tableName: 'student_registrations',
   timestamps: true
 });
+
 
 module.exports = StudentRegistration;

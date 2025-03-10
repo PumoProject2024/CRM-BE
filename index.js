@@ -20,13 +20,36 @@ app.use((req, res, next) => {
     next();
 });
 
+app.use((err, req, res, next) => {
+    console.error('Internal Server Error:', err);
+    res.status(500).json({ message: 'Something went wrong', error: err.message });
+});
+
+
 // Database synchronization
 const initializeDatabase = async () => {
     try {
         await sequelize.authenticate();
         console.log('Database connection established successfully.');
-        await sequelize.sync({ alter: true });
-        console.log('All models synchronized successfully.');
+        
+        try {
+            sequelize.sync({ alter: true }) // Drops and recreates tables
+            console.log('All models synchronized successfully.');
+        } catch (error) {
+            // If the error is specifically about the constraint we know about
+            if (error.name === 'SequelizeUnknownConstraintError' && 
+                error.constraint === 'invoices_studentId_fkey') {
+                
+                console.log('Handling constraint error, attempting to sync with force option...');
+                // Try a more aggressive approach for the Invoice model only
+                const Invoice = require('./models/invoice');
+                await Invoice.sync({ force: true });
+                console.log('Invoice model re-synchronized successfully.');
+            } else {
+                // Some other error occurred
+                throw error;
+            }
+        }
     } catch (error) {
         console.error('Database connection error:', error);
         process.exit(1);
