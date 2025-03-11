@@ -22,6 +22,33 @@ class StudentRegistrationController {
       }
     }
     // Get all student registrations
+    static async getAllStudentRegistrations(req, res) {
+      try {
+        // Optional query parameters for filtering
+        const { page = 1, limit = 10, ...filters } = req.query;
+        
+        const options = {
+          where: filters,
+          limit: parseInt(limit),
+          offset: (page - 1) * limit
+        };
+  
+        const { count, rows: registrations } = await StudentRegistration.findAndCountAll(options);
+        
+        res.status(200).json({
+          totalRegistrations: count,
+          totalPages: Math.ceil(count / limit),
+          currentPage: page,
+          registrations
+        });
+      } catch (error) {
+        console.error('Error fetching student registrations:', error);
+        res.status(500).json({ 
+          error: 'Internal Server Error', 
+          details: error.message 
+        });
+      }
+    }
         // Update an existing student registration
         static async updateStudentRegistration(req, res) {
             try {
