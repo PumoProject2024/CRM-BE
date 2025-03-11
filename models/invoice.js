@@ -5,7 +5,7 @@ const Invoice = sequelize.define('Invoice', {
   id: {
     type: DataTypes.INTEGER,
     primaryKey: true,
-    autoIncrement: true
+    autoIncrement: true,
   },
   studentId: {
     type: DataTypes.INTEGER,
@@ -15,19 +15,9 @@ const Invoice = sequelize.define('Invoice', {
     type: DataTypes.STRING,
     allowNull: false
   },
-  date: {
-    type: DataTypes.DATEONLY,
-    allowNull: false
-  },
-  course: {
+  receipt_no: {
     type: DataTypes.STRING,
     allowNull: false
-  },
-  branch: {
-    type: DataTypes.STRING
-  },
-  location: {
-    type: DataTypes.STRING
   },
   registrationPaymentMode: {
     type: DataTypes.STRING
@@ -47,15 +37,31 @@ const Invoice = sequelize.define('Invoice', {
     type: DataTypes.DECIMAL(10, 2),
     allowNull: false
   },
-  totalAmount: {
+  feescollected: {
     type: DataTypes.DECIMAL(10, 2),
     allowNull: false
+  },
+  paymentInstallment: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    defaultValue: 1
+  },
+  pendingFees: {
+    type: DataTypes.DECIMAL(10, 2),
+    allowNull: true
+  },
+  pendingFeesDate: {
+    type: DataTypes.DATE,
+    allowNull: true
   }
 }, {
   tableName: 'pumo_invoices',
   timestamps: true
 });
 
-
+// Hook to increment `paymentInstallment` on update
+Invoice.beforeUpdate((invoice, options) => {
+  invoice.paymentInstallment += 1;
+});
 
 module.exports = Invoice;

@@ -33,7 +33,7 @@ const initializeDatabase = async () => {
         console.log('Database connection established successfully.');
         
         try {
-            sequelize.sync({ alter: true }) // Drops and recreates tables
+            sequelize.sync({ alter: true });
             console.log('All models synchronized successfully.');
         } catch (error) {
             // If the error is specifically about the constraint we know about
