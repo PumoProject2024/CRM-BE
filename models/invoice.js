@@ -7,13 +7,13 @@ const Invoice = sequelize.define('Invoice', {
     primaryKey: true,
     autoIncrement: true,
   },
-  studentId: {
+  EmpId:{
     type: DataTypes.INTEGER,
     allowNull: false,
   },
-  name: {
-    type: DataTypes.STRING,
-    allowNull: false
+  studentId: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
   },
   receipt_no: {
     type: DataTypes.STRING,
@@ -38,7 +38,7 @@ const Invoice = sequelize.define('Invoice', {
     allowNull: false
   },
   feescollected: {
-    type: DataTypes.DECIMAL(10, 2),
+    type: DataTypes.INTEGER,
     allowNull: false
   },
   paymentInstallment: {
@@ -46,13 +46,13 @@ const Invoice = sequelize.define('Invoice', {
     allowNull: false,
     defaultValue: 1
   },
-  pendingFees: {
-    type: DataTypes.DECIMAL(10, 2),
-    allowNull: true
+  paidAmount: {
+    type: DataTypes.INTEGER,
+    allowNull: false
   },
-  pendingFeesDate: {
+  paymentDate: {
     type: DataTypes.DATE,
-    allowNull: true
+    allowNull: false
   }
 }, {
   tableName: 'pumo_invoices',

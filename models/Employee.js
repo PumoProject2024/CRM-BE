@@ -5,7 +5,6 @@ const Employee = sequelize.define("Employee", {
   emp_id: {
     type: DataTypes.INTEGER,
     primaryKey: true,
-    autoIncrement: true,
   },
   emp_name: {
     type: DataTypes.STRING,

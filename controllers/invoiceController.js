@@ -4,10 +4,10 @@ const StudentRegistration = require('../models/studenReg');
 // Create Invoice
 exports.createInvoice = async (req, res) => {
   try {
-    const { studentId, name, receipt_no, registrationPaymentMode, registrationReferenceNo, amount, cgst, sgst, feescollected, pendingFees, pendingFeesDate } = req.body;
+    const { studentId, EmpId, receipt_no, registrationPaymentMode, registrationReferenceNo, amount, cgst, sgst, feescollected, paidAmount, paymentDate } = req.body;
 
     console.log("Received Invoice Data:", req.body);
-    
+
     if (!receipt_no) {
       return res.status(400).json({ error: "receipt_no is required" });
     }
@@ -21,7 +21,7 @@ exports.createInvoice = async (req, res) => {
     // Creating the invoice
     const invoice = await Invoice.create({
       studentId,
-      name,
+      EmpId,
       receipt_no,
       registrationPaymentMode,
       registrationReferenceNo,
@@ -29,8 +29,8 @@ exports.createInvoice = async (req, res) => {
       cgst,
       sgst,
       feescollected,
-      pendingFees,
-      pendingFeesDate,
+      paidAmount,
+      paymentDate,
       paymentInstallment: 1
     });
 

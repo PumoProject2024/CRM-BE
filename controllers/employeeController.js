@@ -37,9 +37,9 @@ exports.loginEmployee = async (req, res) => {
     }
 
     // Generate JWT token
-    const token = jwt.sign({ emp_id: employee.emp_id, email_id: employee.email_id }, process.env.JWT_SECRET, { expiresIn: "1h" });
+    const token = jwt.sign({ emp_id: employee.emp_id, email_id: employee.email_id }, process.env.JWT_SECRET, { expiresIn: "5h" });
 
-    res.status(200).json({ message: "Login successful", token });
+    res.status(200).json({ message: "Login successful", token});
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -49,7 +49,7 @@ exports.loginEmployee = async (req, res) => {
 exports.getEmployees = async (req, res) => {
     try {
       const employees = await Employee.findAll({
-        attributes: ["email_id"], // Select only the email_id field
+        attributes: ["email_id","emp_id"], // Select only the email_id field
       });
       res.status(200).json(employees);
     } catch (error) {
