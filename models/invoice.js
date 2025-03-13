@@ -37,10 +37,6 @@ const Invoice = sequelize.define('Invoice', {
     type: DataTypes.DECIMAL(10, 2),
     allowNull: false
   },
-  feescollected: {
-    type: DataTypes.INTEGER,
-    allowNull: false
-  },
   paymentInstallment: {
     type: DataTypes.INTEGER,
     allowNull: false,
@@ -56,7 +52,9 @@ const Invoice = sequelize.define('Invoice', {
   }
 }, {
   tableName: 'pumo_invoices',
-  timestamps: true
+  timestamps: true,
+  updatedAt: false,     // Disable updatedAt column
+
 });
 
 // Hook to increment `paymentInstallment` on update

@@ -13,8 +13,6 @@ const router = express.Router();
 router.post('/registrations', StudentRegistrationController.createStudentRegistration);
 router.post('/invoices', createInvoice);
 
-
-
 // GET route to fetch all student registrations
 router.get('/allregistrations', StudentRegistrationController.getAllStudentRegistrations);
 
