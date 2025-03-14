@@ -35,6 +35,8 @@ class StudentRegistrationController {
         where: {},
         limit: limitNum,
         offset: (pageNum - 1) * limitNum,
+        order: [['id', 'ASC']], // Sort by student id in ascending order
+
       };
   
       // Define columns by type:
@@ -46,7 +48,13 @@ class StudentRegistrationController {
         if (stringFields.includes(key)) {
           options.where[key] = { [Op.iLike]: `%${filters[key]}%` };
         } else if (exactFields.includes(key)) {
-          options.where[key] = filters[key];
+          const idValue = parseInt(filters[key], 10);
+          if (!isNaN(idValue)) {
+            options.where.id = { [Op.and]: [
+              { [Op.gte]: idValue },
+              Sequelize.literal(`("id" - ${idValue}) % 10 = 0`)
+            ] };
+          }
         } else if (key === 'pendingFeesDate') {
           options.where.pendingFeesDate = filters[key];
         }
@@ -55,7 +63,7 @@ class StudentRegistrationController {
       // Handle special search case for today's pending fees
       if (todayPendingFees === 'true' || dueToday === 'true') {
         options.where.pendingFeesDate = {
-          [Op.eq]: Sequelize.literal('CURRENT_DATE'), // Fix the syntax error
+          [Op.eq]: Sequelize.literal('CURRENT_DATE'),
         };
       }
       // Handle regular search (partial match across multiple columns)
@@ -65,7 +73,13 @@ class StudentRegistrationController {
           if (stringFields.includes(searchField)) {
             options.where[searchField] = { [Op.iLike]: `%${search}%` };
           } else if (exactFields.includes(searchField)) {
-            options.where[searchField] = search;
+            const searchId = parseInt(search, 10);
+            if (!isNaN(searchId)) {
+              options.where.id = { [Op.and]: [
+                { [Op.gte]: searchId },
+                Sequelize.literal(`("id" - ${searchId}) % 10 = 0`)
+              ] };
+            }
           }
         } else {
           // Global search across multiple fields

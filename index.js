@@ -5,6 +5,7 @@ require('dotenv').config();
 const sequelize = require('./config/database');
 const studentRegistrationRoutes = require('./routes/routes');
 const authRoutes = require('./routes/authRoutes');
+const compression = require('compression');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -13,6 +14,8 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
+app.use(compression());
+
 
 // Request logging middleware
 app.use((req, res, next) => {
