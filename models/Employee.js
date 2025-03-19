@@ -11,7 +11,7 @@ const Employee = sequelize.define("Employee", {
     allowNull: false,
   },
   role: {
-    type: DataTypes.ENUM("BDE", "Trainer", "Placement officer", "Branch-head", "CEO"),
+    type: DataTypes.ENUM("BDE", "Trainer", "Placement officer", "Branch-head", "CEO","Super-Admin"),
     allowNull: false,
   },
   department: {
@@ -19,11 +19,11 @@ const Employee = sequelize.define("Employee", {
     allowNull: false,
   },
   branch: {
-    type: DataTypes.STRING,
+    type: DataTypes.JSON,
     allowNull: false,
   },
   location: {
-    type: DataTypes.STRING,
+    type: DataTypes.JSON,
     allowNull: false,
   },
   email_id: {

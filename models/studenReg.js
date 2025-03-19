@@ -6,7 +6,6 @@ const StudentRegistration = sequelize.define('StudentRegistration', {
     type: DataTypes.INTEGER,
     primaryKey: true,
     autoIncrement: true,
-
   },
   name: {
     type: DataTypes.STRING,
@@ -31,10 +30,22 @@ const StudentRegistration = sequelize.define('StudentRegistration', {
       notEmpty: { msg: "Address cannot be empty" }
     }
   },
-  educationQualification: {
+  educationLevel: {
     type: DataTypes.STRING,
+    allowNull: true,
+  },
+  educationCourse: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  studentStatus: {
+    type: DataTypes.STRING,
+    allowNull: false,
     validate: {
-      notEmpty: { msg: "Education qualification is required" }
+      isIn: {
+        args: [['student', 'fresher', 'workingexperience']],
+        msg: "Invalid student status"
+      }
     }
   },
   dob: {
@@ -143,10 +154,10 @@ const StudentRegistration = sequelize.define('StudentRegistration', {
   studentRequestedBranch: {
     type: DataTypes.STRING
   },
-  location: {
+  adminlocation: {
     type: DataTypes.STRING
   },
-  branch: {
+  adminbranch: {
     type: DataTypes.STRING
   },
   adminFeedback: {
@@ -154,6 +165,9 @@ const StudentRegistration = sequelize.define('StudentRegistration', {
   },
   studentRequirement: {
     type: DataTypes.TEXT
+  },
+  placementneeded: {
+    type: DataTypes.STRING
   },
   staffAssigned: {
     type: DataTypes.STRING

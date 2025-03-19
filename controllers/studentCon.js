@@ -22,82 +22,68 @@ class StudentRegistrationController {
     }
   }
 
-
   static async getAllStudentRegistrations(req, res) {
     try {
-      // Extract pagination and filter parameters from the request
-      const { page = 1, limit = 10, search, searchField, dueToday, todayPendingFees, ...filters } = req.query;
+      const {
+        page = 1,
+        limit = 10,
+        search,
+        searchField,
+        dueToday,
+        todayPendingFees,
+        ...filters
+      } = req.query;
+
       const pageNum = parseInt(page, 10);
+      
       const limitNum = parseInt(limit, 10);
-  
-      // Ensure valid pagination values
+
       const options = {
         where: {},
         limit: limitNum,
         offset: (pageNum - 1) * limitNum,
-        order: [['id', 'ASC']], // Sort by student id in ascending order
-
+        order: [["id", "ASC"]],
       };
-  
-      // Define columns by type:
-      const stringFields = ['name', 'contactNo', 'course', 'batch', 'location', 'branch', 'learningMode'];
-      const exactFields = ['id'];
-  
-      // Apply filters for specific fields
-      Object.keys(filters).forEach((key) => {
+
+      // Extract allowed branches from user
+      const { branch: allowedBranches } = req.user;
+
+      if (!allowedBranches || allowedBranches.length === 0) {
+        return res.status(403).json({ message: "Access denied: No branch assigned" });
+      }
+
+      // Ensure branch filtering
+      options.where.adminbranch = { [Op.in]: allowedBranches };
+
+      const stringFields = ["name", "contactNo", "course", "batch", "branch", "learningMode"];
+      const exactFields = ["id"];
+
+      Object.entries(filters).forEach(([key, value]) => {
         if (stringFields.includes(key)) {
-          options.where[key] = { [Op.iLike]: `%${filters[key]}%` };
+          options.where[key] = { [Op.iLike]: `%${value}%` };
         } else if (exactFields.includes(key)) {
-          const idValue = parseInt(filters[key], 10);
+          const idValue = parseInt(value, 10);
           if (!isNaN(idValue)) {
-            options.where.id = { [Op.and]: [
-              { [Op.gte]: idValue },
-              Sequelize.literal(`("id" - ${idValue}) % 10 = 0`)
-            ] };
+            options.where.id = idValue;
           }
-        } else if (key === 'pendingFeesDate') {
-          options.where.pendingFeesDate = filters[key];
         }
       });
-  
-      // Handle special search case for today's pending fees
-      if (todayPendingFees === 'true' || dueToday === 'true') {
-        options.where.pendingFeesDate = {
-          [Op.eq]: Sequelize.literal('CURRENT_DATE'),
-        };
+
+      if (todayPendingFees === "true" || dueToday === "true") {
+        options.where.pendingFeesDate = { [Op.eq]: Sequelize.literal("CURRENT_DATE") };
       }
-      // Handle regular search (partial match across multiple columns)
-      else if (search) {
-        if (searchField && (stringFields.includes(searchField) || exactFields.includes(searchField))) {
-          // Search in specific field if provided
-          if (stringFields.includes(searchField)) {
-            options.where[searchField] = { [Op.iLike]: `%${search}%` };
-          } else if (exactFields.includes(searchField)) {
-            const searchId = parseInt(search, 10);
-            if (!isNaN(searchId)) {
-              options.where.id = { [Op.and]: [
-                { [Op.gte]: searchId },
-                Sequelize.literal(`("id" - ${searchId}) % 10 = 0`)
-              ] };
-            }
-          }
-        } else {
-          // Global search across multiple fields
-          options.where[Op.or] = [
-            ...stringFields.map((field) => ({
-              [field]: { [Op.iLike]: `%${search}%` },
-            })),
-            Sequelize.where(Sequelize.cast(Sequelize.col('id'), 'TEXT'), {
-              [Op.iLike]: `%${search}%`,
-            }),
-          ];
-        }
+
+      if (search) {
+        options.where[Op.or] = [
+          ...stringFields.map((field) => ({ [field]: { [Op.iLike]: `%${search}%` } })),
+          Sequelize.where(Sequelize.cast(Sequelize.col("id"), "TEXT"), {
+            [Op.iLike]: `%${search}%`,
+          }),
+        ];
       }
-  
-      // Execute the query using Sequelize's findAndCountAll method
+
       const { count, rows: registrations } = await StudentRegistration.findAndCountAll(options);
-  
-      // Send the paginated response
+
       res.status(200).json({
         totalRegistrations: count,
         totalPages: Math.ceil(count / limitNum),
@@ -105,14 +91,13 @@ class StudentRegistrationController {
         registrations,
       });
     } catch (error) {
-      console.error('Error fetching student registrations:', error);
+      console.error("Error fetching student registrations:", error);
       res.status(500).json({
-        error: 'Internal Server Error',
+        error: "Internal Server Error",
         details: error.message,
       });
     }
   }
-  
 
   // Update an existing student registration
   static async updateStudentRegistration(req, res) {

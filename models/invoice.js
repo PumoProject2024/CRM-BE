@@ -43,7 +43,7 @@ const Invoice = sequelize.define('Invoice', {
     defaultValue: 1
   },
   paidAmount: {
-    type: DataTypes.INTEGER,
+    type: DataTypes.DECIMAL(10, 2),
     allowNull: false
   },
   paymentDate: {

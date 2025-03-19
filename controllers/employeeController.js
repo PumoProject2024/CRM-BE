@@ -20,40 +20,61 @@ exports.createEmployee = async (req, res) => {
 };
 
 // Login Employee
+
 exports.loginEmployee = async (req, res) => {
   try {
     const { email_id, password } = req.body;
-
-    // Find employee by email
     const employee = await Employee.findOne({ where: { email_id } });
+
     if (!employee) {
-      return res.status(401).json({ message: "Invalid email or password" });
+      return res.status(404).json({ message: "User not found" });
     }
 
-    // Compare passwords
-    const isMatch = await bcrypt.compare(password, employee.password);
-    if (!isMatch) {
-      return res.status(401).json({ message: "Invalid email or password" });
+    const isPasswordValid = await bcrypt.compare(password, employee.password);
+    if (!isPasswordValid) {
+      return res.status(401).json({ message: "Invalid credentials" });
     }
 
-    // Generate JWT token
-    const token = jwt.sign({ emp_id: employee.emp_id, email_id: employee.email_id }, process.env.JWT_SECRET, { expiresIn: "5h" });
+    const token = jwt.sign(
+      {
+        emp_id: employee.emp_id,
+        emp_name: employee.emp_name,
+        role: employee.role,
+        branch: employee.branch, // ✅ Only branch included
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "8h" }
+    );
 
-    res.status(200).json({ message: "Login successful", token});
+    res.json({ token });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 };
 
 // Get All Employees
+// employeeController.js
 exports.getEmployees = async (req, res) => {
-    try {
-      const employees = await Employee.findAll({
-        attributes: ["email_id","emp_id"], // Select only the email_id field
-      });
-      res.status(200).json(employees);
-    } catch (error) {
-      res.status(500).json({ error: error.message });
+  try {
+    // Get the logged-in user's ID from req.user (populated by your middleware)
+    const loggedInUserId = req.user.emp_id;
+    
+    // Find only the specific employee
+    const employee = await Employee.findOne({
+      where: { emp_id: loggedInUserId },
+      attributes: ["email_id", "emp_id", "role", "location", "branch"],
+    });
+
+    console.log("Employee Fetched:", employee);
+    
+    if (!employee) {
+      return res.status(404).json({ message: "Employee not found" });
     }
-  };
+    
+    res.status(200).json(employee);
+  } catch (error) {
+    console.error("Error fetching employee:", error);
+    res.status(500).json({ error: error.message });
+  }
+};
   

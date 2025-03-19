@@ -7,6 +7,10 @@ const studentRegistrationRoutes = require('./routes/routes');
 const authRoutes = require('./routes/authRoutes');
 const compression = require('compression');
 
+// Import seeders
+const seedCourseData = require('./seeds/courseSeeder');
+const seedLocationData = require('./seeds/locationSeeder');
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -15,7 +19,6 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(compression());
-
 
 // Request logging middleware
 app.use((req, res, next) => {
@@ -28,28 +31,30 @@ app.use((err, req, res, next) => {
     res.status(500).json({ message: 'Something went wrong', error: err.message });
 });
 
-
-// Database synchronization
+// Database synchronization and seeding
 const initializeDatabase = async () => {
     try {
         await sequelize.authenticate();
         console.log('Database connection established successfully.');
-        
+
         try {
-            sequelize.sync({ alter: true });
+            await sequelize.sync({ alter: true });
             console.log('All models synchronized successfully.');
+
+            // Run seeders
+            await seedCourseData();
+            await seedLocationData();
+            console.log('Seeding completed successfully.');
+
         } catch (error) {
-            // If the error is specifically about the constraint we know about
             if (error.name === 'SequelizeUnknownConstraintError' && 
                 error.constraint === 'invoices_studentId_fkey') {
-                
+
                 console.log('Handling constraint error, attempting to sync with force option...');
-                // Try a more aggressive approach for the Invoice model only
                 const Invoice = require('./models/invoice');
                 await Invoice.sync({ force: true });
                 console.log('Invoice model re-synchronized successfully.');
             } else {
-                // Some other error occurred
                 throw error;
             }
         }
@@ -63,6 +68,7 @@ initializeDatabase();
 // Routes
 app.use('/api', studentRegistrationRoutes);
 app.use('/auth', authRoutes);
+
 app.get('/', (req, res) => {
     res.send('Student Registration API is running');
 });
