@@ -171,7 +171,10 @@ const StudentRegistration = sequelize.define('StudentRegistration', {
   },
   staffAssigned: {
     type: DataTypes.STRING
-  }
+  },
+  modified_by: {
+    type: DataTypes.STRING
+  },
 }, {
   tableName: 'student_registrations',
   timestamps: true

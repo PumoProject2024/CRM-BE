@@ -5,22 +5,34 @@ class StudentRegistrationController {
   static async createStudentRegistration(req, res) {
     try {
       const studentData = req.body;
-
-      // Create student registration
+  
+      // ✅ Ensure user is available from the authentication middleware
+      const user = req.user; // Use req.user from authMiddleware
+  
+      if (!user) {
+        return res.status(401).json({ message: 'Unauthorized' });
+      }
+  
+      // ✅ Add modified_by field with the logged-in user's name
+      studentData.modified_by = user.emp_id; // Correctly assign user name
+  
+      // ✅ Create student registration with modified_by
       const newRegistration = await StudentRegistration.create(studentData);
-
-      res.status(200).json({
+  
+      res.status(201).json({
         message: 'Student Registration Created Successfully',
-        student: newRegistration
+        student: newRegistration,
       });
     } catch (error) {
       console.error('Error creating student registration:', error);
       res.status(500).json({
         error: 'Internal Server Error',
-        details: error.message
+        details: error.message,
       });
     }
   }
+  
+  
 
   static async getAllStudentRegistrations(req, res) {
     try {
@@ -55,7 +67,7 @@ class StudentRegistrationController {
       // Ensure branch filtering
       options.where.adminbranch = { [Op.in]: allowedBranches };
 
-      const stringFields = ["name", "contactNo", "course", "batch", "branch", "learningMode"];
+      const stringFields = ["name", "contactNo", "course", "batch", "adminbranch", "learningMode"];
       const exactFields = ["id"];
 
       Object.entries(filters).forEach(([key, value]) => {
@@ -73,14 +85,25 @@ class StudentRegistrationController {
         options.where.pendingFeesDate = { [Op.eq]: Sequelize.literal("CURRENT_DATE") };
       }
 
-      if (search) {
+      if (search && searchField) {
+        if (exactFields.includes(searchField)) {
+          // Handle exact match for fields like 'id'
+          const idValue = parseInt(search, 10);
+          if (!isNaN(idValue)) {
+            options.where[searchField] = idValue; // Exact match for id
+          }
+        } else if (stringFields.includes(searchField)) {
+          // Handle partial match for string fields
+          options.where[searchField] = { [Op.iLike]: `%${search}%` };
+        }
+      } else if (search) {
+        // General search across multiple fields
         options.where[Op.or] = [
           ...stringFields.map((field) => ({ [field]: { [Op.iLike]: `%${search}%` } })),
-          Sequelize.where(Sequelize.cast(Sequelize.col("id"), "TEXT"), {
-            [Op.iLike]: `%${search}%`,
-          }),
+          { id: !isNaN(parseInt(search, 10)) ? parseInt(search, 10) : null },
         ];
       }
+      
 
       const { count, rows: registrations } = await StudentRegistration.findAndCountAll(options);
 
@@ -104,31 +127,47 @@ class StudentRegistrationController {
     try {
       const { id } = req.params;
       const updateData = req.body;
-
-      // Find the student registration by ID
-      const student = await StudentRegistration.findByPk(id);
-
-      if (!student) {
-        return res.status(404).json({
-          error: 'Student Registration Not Found'
+  
+      // ✅ Ensure the user is authenticated and retrieve their name
+      const { emp_id } = req.user || {};
+  
+      if (!emp_id) {
+        return res.status(401).json({
+          error: 'Unauthorized: Missing user information.',
         });
       }
-
-      // Update the student registration
+  
+      console.log("Logged-in User: ", emp_id);
+  
+      // ✅ Find the student registration by ID
+      const student = await StudentRegistration.findByPk(id);
+  
+      if (!student) {
+        return res.status(404).json({
+          error: 'Student Registration Not Found',
+        });
+      }
+  
+      // ✅ Add the modified_by field (logged-in user's name)
+      updateData.modified_by = emp_id;
+  
+      // ✅ Update the student registration
       await student.update(updateData);
-
+  
       res.status(200).json({
         message: 'Student Registration Updated Successfully',
-        student
+        student,
       });
     } catch (error) {
       console.error('Error updating student registration:', error);
       res.status(500).json({
         error: 'Internal Server Error',
-        details: error.message
+        details: error.message,
       });
     }
   }
+  
+  
 
 }
 

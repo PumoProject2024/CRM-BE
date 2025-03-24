@@ -27,6 +27,8 @@ exports.login = async (req, res) => {
         role: employee.role,
         email_id: employee.email_id,
         branch: employee.branch, // Ensure branch is included
+        emp_name: employee.emp_name, // Ensure the user's name is included here
+
       },
       process.env.JWT_SECRET,
       { expiresIn: "8h" }

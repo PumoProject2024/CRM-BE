@@ -49,7 +49,10 @@ const Invoice = sequelize.define('Invoice', {
   paymentDate: {
     type: DataTypes.DATE,
     allowNull: false
-  }
+  },
+  modified_by: {
+    type: DataTypes.STRING
+  },
 }, {
   tableName: 'pumo_invoices',
   timestamps: true,

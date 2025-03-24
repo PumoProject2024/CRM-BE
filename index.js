@@ -38,7 +38,7 @@ const initializeDatabase = async () => {
         console.log('Database connection established successfully.');
 
         try {
-            await sequelize.sync({ alter: true });
+            await sequelize.sync({ alter: false });
             console.log('All models synchronized successfully.');
 
             // Run seeders
