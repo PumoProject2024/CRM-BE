@@ -7,6 +7,10 @@ const StudentRegistration = sequelize.define('StudentRegistration', {
     primaryKey: true,
     autoIncrement: true,
   },
+  studentId:{
+    type:DataTypes.STRING,
+  allowNull:true,
+  },
   name: {
     type: DataTypes.STRING,
     allowNull: false,

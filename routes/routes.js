@@ -27,7 +27,7 @@ router.get('/invoices',getInvoices);
 // GET route to fetch all student registrations
 router.get('/allregistrations',authMiddleware, StudentRegistrationController.getAllStudentRegistrations);
 
-router.put('/registrations/:id', authMiddleware,StudentRegistrationController.updateStudentRegistration);
+router.put('/registrations/:studentId', authMiddleware,StudentRegistrationController.updateStudentRegistration);
 
 router.post("/register", employeeController.createEmployee); // Allow first registration without auth
 router.post("/login", employeeController.loginEmployee); // Login to get JWT token

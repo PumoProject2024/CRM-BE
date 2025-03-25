@@ -12,7 +12,7 @@ const Invoice = sequelize.define('Invoice', {
     allowNull: false,
   },
   studentId: {
-    type: DataTypes.INTEGER,
+    type: DataTypes.STRING,
     allowNull: false,
   },
   receipt_no: {

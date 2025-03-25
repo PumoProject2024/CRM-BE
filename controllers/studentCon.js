@@ -13,10 +13,41 @@ class StudentRegistrationController {
         return res.status(401).json({ message: 'Unauthorized' });
       }
   
-      // ✅ Add modified_by field with the logged-in user's name
-      studentData.modified_by = user.emp_id; // Correctly assign user name
+      // ✅ Validate required fields
+      const { contactNo, course, adminbranch, studentId: rawStudentId } = studentData;
   
-      // ✅ Create student registration with modified_by
+      if (!contactNo || !course || !adminbranch || !rawStudentId) {
+        return res.status(400).json({
+          message: 'Contact number, course, admin branch, and student number are required.',
+        });
+      }
+  
+      // ✅ Generate unique studentId (e.g., "Velachery-1000")
+      const studentId = `${adminbranch}-${rawStudentId}`;
+      studentData.studentId = studentId;
+  
+      // ✅ Check if the student is already registered for the same course
+      const existingStudent = await StudentRegistration.findOne({
+        where: { contactNo, course },
+      });
+  
+      if (existingStudent) {
+        return res.status(409).json({ message: 'This student is already registered for this course' });
+      }
+  
+      // ✅ Ensure studentId is unique across the system
+      const existingStudentId = await StudentRegistration.findOne({
+        where: { studentId },
+      });
+  
+      if (existingStudentId) {
+        return res.status(409).json({ message: 'Student ID already exists. Use a different number.' });
+      }
+  
+      // ✅ Add modified_by field with the logged-in user's emp_id
+      studentData.modified_by = user.emp_id;
+  
+      // ✅ Create new student registration
       const newRegistration = await StudentRegistration.create(studentData);
   
       res.status(201).json({
@@ -33,7 +64,7 @@ class StudentRegistrationController {
   }
   
   
-
+  
   static async getAllStudentRegistrations(req, res) {
     try {
       const {
@@ -125,10 +156,11 @@ class StudentRegistrationController {
   // Update an existing student registration
   static async updateStudentRegistration(req, res) {
     try {
-      const { id } = req.params;
+      // ✅ Extract studentId from request params
+      const { studentId } = req.params;
       const updateData = req.body;
   
-      // ✅ Ensure the user is authenticated and retrieve their name
+      // ✅ Ensure the user is authenticated and retrieve their emp_id
       const { emp_id } = req.user || {};
   
       if (!emp_id) {
@@ -139,8 +171,8 @@ class StudentRegistrationController {
   
       console.log("Logged-in User: ", emp_id);
   
-      // ✅ Find the student registration by ID
-      const student = await StudentRegistration.findByPk(id);
+      // ✅ Find the student registration by studentId
+      const student = await StudentRegistration.findOne({ where: { studentId } });
   
       if (!student) {
         return res.status(404).json({
@@ -148,7 +180,7 @@ class StudentRegistrationController {
         });
       }
   
-      // ✅ Add the modified_by field (logged-in user's name)
+      // ✅ Add the modified_by field (logged-in user's emp_id)
       updateData.modified_by = emp_id;
   
       // ✅ Update the student registration
@@ -165,7 +197,8 @@ class StudentRegistrationController {
         details: error.message,
       });
     }
-  }
+  } // Ensure your route uses studentId
+  
   
   
 

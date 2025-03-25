@@ -20,8 +20,10 @@ exports.createInvoice = async (req, res) => {
     }
 
     // ✅ Ensure the student exists
-    const student = await StudentRegistration.findByPk(studentId);
-    if (!student) {
+    const student = await StudentRegistration.findOne({
+      where: { studentId: req.body.studentId },
+    });
+        if (!student) {
       return res.status(404).json({ error: "Student not found" });
     }
 
@@ -65,12 +67,19 @@ exports.getInvoices = async (req, res) => {
   try {
     const { studentId } = req.query;
 
-    const whereConditions = {};
-    if (studentId) whereConditions.studentId = studentId;
+    // Validate input
+    if (!studentId) {
+      return res.status(400).json({ error: 'studentId is required.' });
+    }
 
     const invoices = await Invoice.findAll({
-      where: whereConditions,
+      where: { studentId: String(studentId) },
+      order: [['createdAt', 'DESC']], // Latest invoices first
     });
+
+    if (!invoices.length) {
+      return res.status(404).json({ message: 'No invoices found for this student.' });
+    }
 
     res.status(200).json({
       message: 'Invoices retrieved successfully',
@@ -84,3 +93,4 @@ exports.getInvoices = async (req, res) => {
     });
   }
 };
+
