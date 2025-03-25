@@ -3,6 +3,13 @@ require("dotenv").config();
 
 const authMiddleware = (req, res, next) => {
   try {
+    console.log("Incoming Request: ", req.method, req.originalUrl);
+
+    // ✅ Bypass auth for public routes (like /register)
+    if (req.originalUrl === "/register") {
+      return next(); // Allow access without token
+    }
+
     // ✅ Extract the Authorization header
     const authHeader = req.header("Authorization");
     console.log("Incoming Request: ", req.method, req.originalUrl);

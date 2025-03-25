@@ -8,23 +8,26 @@ const { Op,Sequelize } = require('sequelize');
 exports.createEmployee = async (req, res) => {
   try {
     const { password, ...employeeData } = req.body;
-    
-    // Assuming the logged-in user's ID is available in req.user.emp_id
-    // If your authentication middleware stores it differently, adjust accordingly
-    const loggedInUserId = req.user.emp_id;
+
 
     // Hash the password
     const hashedPassword = await bcrypt.hash(password, 10);
- 
-    // Create new employee with the modified_by field
-    const newEmployee = await Employee.create({ 
-      ...employeeData, 
+
+    // Create new employee
+    const newEmployee = await Employee.create({
+      ...employeeData,
       password: hashedPassword,
-      modified_by: loggedInUserId // Add the logged-in user's ID
     });
 
-    res.status(201).json({ message: "Employee registered successfully", employee: newEmployee });
+    // ✅ Log the new employee's emp_id
+    console.log("✅ New Employee ID:", newEmployee.emp_id);
+
+    res.status(201).json({
+      message: "Employee registered successfully",
+      employee: newEmployee,
+    });
   } catch (error) {
+    console.error("❌ Error in createEmployee:", error);
     res.status(400).json({ error: error.message });
   }
 };

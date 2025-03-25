@@ -15,7 +15,7 @@ const Employee = sequelize.define("Employee", {
     allowNull: false,
   },
   department: {
-    type: DataTypes.STRING,
+    type: DataTypes.JSON,
     allowNull: false,
   },
   branch: {
