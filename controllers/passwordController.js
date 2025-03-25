@@ -36,7 +36,7 @@ exports.requestPasswordReset = async (req, res) => {
     await Employee.update(
       { 
         reset_token: hashedToken, 
-        reset_token_expires: new Date(Date.now() + 3600000) // Token valid for 1 hour
+        reset_token_expires: new Date(Date.now() + 5 * 60 * 1000) // Token valid for 5 minutes
       }, 
       { where: { emp_id: employee.emp_id } }
     );
