@@ -19,6 +19,14 @@ const StudentRegistration = sequelize.define('StudentRegistration', {
       len: { args: [3, 100], msg: "Name should be between 3 and 100 characters" }
     }
   },
+  email_Id: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    unique: true,
+    validate: {
+      isEmail: true,
+    },
+  },
   contactNo: {
     type: DataTypes.STRING,
     allowNull: false,
@@ -42,12 +50,18 @@ const StudentRegistration = sequelize.define('StudentRegistration', {
     type: DataTypes.STRING,
     allowNull: true,
   },
+  department: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
   studentStatus: {
     type: DataTypes.STRING,
     allowNull: false,
     validate: {
       isIn: {
-        args: [['student', 'fresher', 'workingexperience']],
+        args: [['student', 'fresher', 'workingexperience','workingexperience1-2','workingexperience2-3','workingexperience3-4','workingexperience4-5',
+          'workingexperience5-6','workingexperience6-7','workingexperience7-8','workingexperience8-9','workingexperience9-10','workingexperience>10'
+        ]],
         msg: "Invalid student status"
       }
     }
