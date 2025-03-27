@@ -62,9 +62,7 @@ class StudentRegistrationController {
       });
     }
   }
-  
-  
-  
+   
   static async getAllStudentRegistrations(req, res) {
     try {
       const {
