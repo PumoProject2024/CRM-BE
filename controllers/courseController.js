@@ -12,6 +12,7 @@ exports.createCourse = async (req, res) => {
     const newCourse = await CourseDetails.create({
       courseType: req.body.courseType,
       courseName: req.body.courseName,
+      courseDuration: req.body.courseDuration,
       courseFees: req.body.courseFees
     });
 
@@ -74,6 +75,7 @@ exports.updateCourse = async (req, res) => {
       {
         courseType: req.body.courseType,
         courseName: req.body.courseName,
+        courseDuration: req.body.courseDuration,
         courseFees: req.body.courseFees
       }, 
       {

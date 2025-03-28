@@ -21,6 +21,9 @@ const CourseDetails = sequelize.define('CourseDetails', {
       notEmpty: { msg: "Course name cannot be empty" }
     }
   },
+  courseDuration: {
+    type: DataTypes.STRING
+  },
   courseFees: {
     type: DataTypes.DECIMAL(10, 2),
     allowNull: false,
