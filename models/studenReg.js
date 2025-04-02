@@ -4,13 +4,15 @@ const sequelize = require('../config/database');
 const StudentRegistration = sequelize.define('StudentRegistration', {
   id: {
     type: DataTypes.INTEGER,
-    primaryKey: true,
     autoIncrement: true,
+    primaryKey: true, // id should be the primary key
   },
-  studentId:{
-    type:DataTypes.STRING,
-  allowNull:true,
+  studentId: {
+    type: DataTypes.STRING,
+    allowNull: false,
+    unique: true // Instead of making it primary, make it UNIQUE
   },
+  
   name: {
     type: DataTypes.STRING,
     allowNull: false,
@@ -59,8 +61,8 @@ const StudentRegistration = sequelize.define('StudentRegistration', {
     allowNull: false,
     validate: {
       isIn: {
-        args: [['student', 'fresher', 'workingexperience','workingexperience1-2','workingexperience2-3','workingexperience3-4','workingexperience4-5',
-          'workingexperience5-6','workingexperience6-7','workingexperience7-8','workingexperience8-9','workingexperience9-10','workingexperience>10'
+        args: [['student', 'fresher', 'workingexperience', 'workingexperience1-2', 'workingexperience2-3', 'workingexperience3-4', 'workingexperience4-5',
+          'workingexperience5-6', 'workingexperience6-7', 'workingexperience7-8', 'workingexperience8-9', 'workingexperience9-10', 'workingexperience>10'
         ]],
         msg: "Invalid student status"
       }
@@ -88,7 +90,7 @@ const StudentRegistration = sequelize.define('StudentRegistration', {
     type: DataTypes.STRING,
     validate: {
       isIn: {
-        args: [['9AM-11AM', '12PM-2PM','3PM-5PM', '6PM-8PM']],
+        args: [['9AM-11AM', '12PM-2PM', '3PM-5PM', '6PM-8PM']],
         msg: "Invalid payment mode"
       }
     }
@@ -119,7 +121,7 @@ const StudentRegistration = sequelize.define('StudentRegistration', {
     type: DataTypes.STRING,
     validate: {
       isIn: {
-        args: [['cash', 'Credit Card','Debit Card', 'Online','Loan']],
+        args: [['cash', 'Credit Card', 'Debit Card', 'Online', 'Loan']],
         msg: "Invalid payment mode"
       }
     }

@@ -68,6 +68,26 @@ exports.getCourseById = async (req, res) => {
   }
 };
 
+exports.getCourseByNameAndType = async (req, res) => {
+  try {
+    const { courseName, courseType } = req.params;
+
+    // Fetch course details by name and type
+    const course = await CourseDetails.findOne({ 
+      where: { courseName, courseType } 
+    });
+
+    if (!course) {
+      return res.status(404).json({ error: 'Course not found' });
+    }
+
+    res.status(200).json(course);
+  } catch (error) {
+    console.error('Error fetching course:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+};
+
 // Update a course
 exports.updateCourse = async (req, res) => {
   try {
