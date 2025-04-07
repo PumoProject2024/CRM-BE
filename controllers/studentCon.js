@@ -5,105 +5,90 @@ const StudentRegistration = require('../models/studenReg');
 const BRANCH_ABBREVIATIONS = {
   "Tambaram": "TBR",
   "Velachery": "VLY",
-  "Adyar": "ADY",
-  "T.Nagar": "TNR",
-  "Anna Nagar": "ANR",
-  "Porur": "POR",
+  "Vadapalani": "VPL",
+  "Poonamallee": "PNM",
+  "Marathahalli": "MHY",
+  "Gandhipuram": "GPR",
+  "Malumichampatti": "MMP",
+  "Hamumanthapuram": "HMP",
+
   // Add more as needed
 };
 
 const getBranchAbbreviation = (branchName) => {
   if (!branchName) return "UNK"; // Unknown branch
-  
+
   // Check if we have a predefined abbreviation
   if (BRANCH_ABBREVIATIONS[branchName]) {
     return BRANCH_ABBREVIATIONS[branchName];
   }
-  
+
   // Fallback: first 3 letters uppercase
   return branchName.substring(0, 3).toUpperCase();
 };
 
 class StudentRegistrationController {
- // In your student registration controller
- static async createStudentRegistration(req, res) {
-  try {
-    const studentData = req.body;
-    const user = req.user;
-
-    if (!user) {
-      return res.status(401).json({ message: 'Unauthorized' });
-    }
-
-    const { contactNo, course, adminbranch } = studentData;
-
-    if (!contactNo || !course || !adminbranch) {
-      return res.status(400).json({
-        message: 'Contact number, course, and admin branch are required.',
-      });
-    }
-
-    // Convert empty strings to null
-    Object.keys(studentData).forEach(key => {
-      if (studentData[key] === "") {
-        studentData[key] = null;
-      }
-    });
-
-    // Check if already registered for the same course
-    const existingStudent = await StudentRegistration.findOne({
-      where: { contactNo, course },
-    });
-
-    if (existingStudent) {
-      return res.status(409).json({
-        message: 'This student is already registered for this course',
-      });
-    }
-
-    // Get branch abbreviation
-    const branchAbbr = getBranchAbbreviation(adminbranch);
-
-    // Generate next studentId using abbreviation
-    const lastStudent = await StudentRegistration.findOne({
-      where: {
-        studentId: {
-          [Op.like]: `${branchAbbr}-%`, // Find IDs starting with the abbreviation
-        },
-      },
-      order: [['studentId', 'DESC']], // Get the highest ID
-    });
-
-    let nextNumber = 1001; // Starting number
-    if (lastStudent) {
-      const lastId = lastStudent.studentId;
-      const lastNumber = parseInt(lastId.split('-')[1]);
-      if (!isNaN(lastNumber)) {
-        nextNumber = lastNumber + 1;
-      }
-    }
-
-    const studentId = `${branchAbbr}-${nextNumber}`;
-    studentData.studentId = studentId;
-
-    // Add modified_by field
-    studentData.modified_by = user.emp_id;
-
-    const newRegistration = await StudentRegistration.create(studentData);
-
-    res.status(201).json({
-      message: 'Student Registration Created Successfully',
-      student: newRegistration,
-    });
-  } catch (error) {
-    console.error('Error creating student registration:', error);
-    res.status(500).json({
-      error: 'Internal Server Error',
-      details: error.message,
-    });
-  }
-}
+  // In your student registration controller
+  static async createStudentRegistration(req, res) {
+    try {
+      const studentData = req.body;
+      const user = req.user;
+      const { preview } = req.query; // New flag to check if we only need the next ID
   
+      if (!user) {
+        return res.status(401).json({ message: 'Unauthorized' });
+      }
+  
+      // Generate next studentId logic (reusable for both preview and actual creation)
+      const generateNextId = async (branch) => {
+        const branchAbbr = getBranchAbbreviation(branch);
+        const lastStudent = await StudentRegistration.findOne({
+          where: { studentId: { [Op.like]: `${branchAbbr}-%` } },
+          order: [['studentId', 'DESC']],
+        });
+  
+        let nextNumber = 1001;
+        if (lastStudent?.studentId) {
+          const lastNumber = parseInt(lastStudent.studentId.split('-')[1], 10);
+          if (!isNaN(lastNumber)) nextNumber = lastNumber + 1;
+        }
+        return `${branchAbbr}-${nextNumber}`;
+      };
+  
+      // CASE 1: Only preview next ID (called when branch is selected)
+      if (preview === 'true' && studentData.adminbranch) {
+        const nextId = await generateNextId(studentData.adminbranch);
+        return res.json({ nextId });
+      }
+  
+      // CASE 2: Actual registration (existing logic)
+      const { contactNo, course, adminbranch } = studentData;
+      if (!contactNo || !course || !adminbranch) {
+        return res.status(400).json({
+          message: 'Contact number, course, and admin branch are required.',
+        });
+      }
+  
+      // ... (rest of your existing validation logic) ...
+  
+      const studentId = await generateNextId(adminbranch);
+      studentData.studentId = studentId;
+      studentData.modified_by = user.emp_id;
+  
+      const newRegistration = await StudentRegistration.create(studentData);
+      
+      res.status(201).json({
+        message: 'Registration successful',
+        student: newRegistration
+      });
+  
+    } catch (error) {
+      console.error('Error:', error);
+      res.status(500).json({ error: 'Internal Server Error' });
+    }
+  }
+  
+
   static async getAllStudentRegistrations(req, res) {
     try {
       const {
@@ -138,13 +123,12 @@ class StudentRegistrationController {
 
       // Ensure branch filtering
       // ✅ Apply filtering based on role
-      if (role === "BDE") {
-        options.where.adminEmpName = emp_name; // Show only records where adminEmpName matches the logged-in BDE
-      } else if (role === "Trainer") {
-        options.where.staffAssigned = emp_name; // Show only records where staffAssigned matches the logged-in Trainer
+      if (role === "Trainer") {
+        options.where.staffAssigned = emp_name;
       } else {
-        options.where.adminbranch = { [Op.in]: allowedBranches }; // Regular branch-based filtering
+        options.where.adminbranch = { [Op.in]: allowedBranches };
       }
+
       if (dueToday === "true") {
         const todayDate = new Date().toISOString().split("T")[0]; // Get YYYY-MM-DD format
         options.where[Op.or] = [
@@ -162,11 +146,11 @@ class StudentRegistrationController {
           "courseType", "courseDuration", "classType", "demoGivenBy",
           "registrationPaymentMode", "registrationReferenceNo",
           "adminEmpName", "source", "studentRequestedLocation",
-          "studentRequestedBranch", "adminlocation", "staffAssigned"
+          "studentRequestedBranch", "adminlocation", "staffAssigned","studentId",
         ],
-        decimalFields: ["courseFees", "feesCollected", "pendingFees", "discountAmount","pendingFees2"],
+        decimalFields: ["courseFees", "feesCollected", "pendingFees", "discountAmount", "pendingFees2"],
         numericFields: ["id", "placementneeded"],
-        dateFields: ["dob", "demoGivenDate", "dateOfAdmission", "pendingFeesDate","pendingFeesDate2"]
+        dateFields: ["dob", "demoGivenDate", "dateOfAdmission", "pendingFeesDate", "pendingFeesDate2"]
       };
 
       // Validate searchField

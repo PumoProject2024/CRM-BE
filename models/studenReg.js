@@ -56,6 +56,10 @@ const StudentRegistration = sequelize.define('StudentRegistration', {
     type: DataTypes.STRING,
     allowNull: true,
   },
+  clg_name: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
   studentStatus: {
     type: DataTypes.STRING,
     allowNull: false,
