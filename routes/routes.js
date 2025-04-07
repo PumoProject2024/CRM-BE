@@ -16,6 +16,8 @@ router.get('/location', getAllLocations);
 router.post("/student", studentController.createStudent);
 router.get("/students", studentController.getAllStudents);
 router.get("/students/:contactNo", studentController.getStudentByContactNo);
+router.get('/bde-employees',employeeController.getBDEEmployees);
+
 
 
 router.post('/password/forgot', passwordController.requestPasswordReset);
@@ -42,10 +44,11 @@ router.get('/allregistrations',authMiddleware, StudentRegistrationController.get
 router.put('/registrations/:studentId', authMiddleware,StudentRegistrationController.updateStudentRegistration);
 
 router.post("/register", employeeController.createEmployee); // Allow first registration without auth
-router.post("/login", employeeController.loginEmployee); // Login to get JWT token
+router.post("/login", employeeController.loginEmployee); // No middleware here
 router.get("/regdetail", authMiddleware, employeeController.getEmployees);
 router.put('/regdetail/update', authMiddleware, employeeController.updateEmployeeProfile);
 router.post('/changepassword', authMiddleware, employeeController.changePassword);
+
 
 
 

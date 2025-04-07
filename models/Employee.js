@@ -11,7 +11,7 @@ const Employee = sequelize.define("Employee", {
     allowNull: false,
   },
   role: {
-    type: DataTypes.ENUM("BDE", "Trainer", "Placement officer", "Branch-head", "CEO","Super-Admin"),
+    type: DataTypes.ENUM("BDE", "Trainer", "Placement officer", "Branch-head", "CEO", "Super-Admin"),
     allowNull: false,
   },
   department: {
@@ -60,6 +60,12 @@ const Employee = sequelize.define("Employee", {
   modified_by: {
     type: DataTypes.STRING
   },
+  // models/Employee.js
+  has_access: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+  },
+
 });
 
 module.exports = Employee;

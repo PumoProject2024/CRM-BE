@@ -1,74 +1,109 @@
 const { Op, Sequelize } = require('sequelize');
 const StudentRegistration = require('../models/studenReg');
 
+// Add this utility function (can be in a separate utils file or at the top of your controller)
+const BRANCH_ABBREVIATIONS = {
+  "Tambaram": "TBR",
+  "Velachery": "VLY",
+  "Adyar": "ADY",
+  "T.Nagar": "TNR",
+  "Anna Nagar": "ANR",
+  "Porur": "POR",
+  // Add more as needed
+};
+
+const getBranchAbbreviation = (branchName) => {
+  if (!branchName) return "UNK"; // Unknown branch
+  
+  // Check if we have a predefined abbreviation
+  if (BRANCH_ABBREVIATIONS[branchName]) {
+    return BRANCH_ABBREVIATIONS[branchName];
+  }
+  
+  // Fallback: first 3 letters uppercase
+  return branchName.substring(0, 3).toUpperCase();
+};
+
 class StudentRegistrationController {
-  static async createStudentRegistration(req, res) {
-    try {
-      const studentData = req.body;
-      const user = req.user; // Use req.user from authMiddleware
+ // In your student registration controller
+ static async createStudentRegistration(req, res) {
+  try {
+    const studentData = req.body;
+    const user = req.user;
 
-      if (!user) {
-        return res.status(401).json({ message: 'Unauthorized' });
-      }
+    if (!user) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
 
-      // ✅ Validate required fields
-      const { contactNo, course, adminbranch, studentId: rawStudentId } = studentData;
+    const { contactNo, course, adminbranch } = studentData;
 
-      if (!contactNo || !course || !adminbranch || !rawStudentId) {
-        return res.status(400).json({
-          message: 'Contact number, course, admin branch, and student number are required.',
-        });
-      }
-
-      // ✅ Convert empty strings to null (Fix validation errors)
-      Object.keys(studentData).forEach(key => {
-        if (studentData[key] === "") {
-          studentData[key] = null;
-        }
-      });
-
-      // ✅ Generate unique studentId
-      const studentId = `${adminbranch}-${rawStudentId}`;
-      studentData.studentId = studentId;
-
-      // ✅ Check if student already registered for the same course
-      const existingStudent = await StudentRegistration.findOne({
-        where: { contactNo, course },
-      });
-
-      if (existingStudent) {
-        return res.status(409).json({ message: 'This student is already registered for this course' });
-      }
-
-      // ✅ Ensure studentId is unique
-      const existingStudentId = await StudentRegistration.findOne({
-        where: { studentId },
-      });
-
-      if (existingStudentId) {
-        return res.status(409).json({ message: 'Student ID already exists. Use a different number.' });
-      }
-
-      // ✅ Add modified_by field
-      studentData.modified_by = user.emp_id;
-
-      // ✅ Create new student registration
-      const newRegistration = await StudentRegistration.create(studentData);
-
-      res.status(201).json({
-        message: 'Student Registration Created Successfully',
-        student: newRegistration,
-      });
-    } catch (error) {
-      console.error('Error creating student registration:', error);
-      res.status(500).json({
-        error: 'Internal Server Error',
-        details: error.message,
+    if (!contactNo || !course || !adminbranch) {
+      return res.status(400).json({
+        message: 'Contact number, course, and admin branch are required.',
       });
     }
+
+    // Convert empty strings to null
+    Object.keys(studentData).forEach(key => {
+      if (studentData[key] === "") {
+        studentData[key] = null;
+      }
+    });
+
+    // Check if already registered for the same course
+    const existingStudent = await StudentRegistration.findOne({
+      where: { contactNo, course },
+    });
+
+    if (existingStudent) {
+      return res.status(409).json({
+        message: 'This student is already registered for this course',
+      });
+    }
+
+    // Get branch abbreviation
+    const branchAbbr = getBranchAbbreviation(adminbranch);
+
+    // Generate next studentId using abbreviation
+    const lastStudent = await StudentRegistration.findOne({
+      where: {
+        studentId: {
+          [Op.like]: `${branchAbbr}-%`, // Find IDs starting with the abbreviation
+        },
+      },
+      order: [['studentId', 'DESC']], // Get the highest ID
+    });
+
+    let nextNumber = 1001; // Starting number
+    if (lastStudent) {
+      const lastId = lastStudent.studentId;
+      const lastNumber = parseInt(lastId.split('-')[1]);
+      if (!isNaN(lastNumber)) {
+        nextNumber = lastNumber + 1;
+      }
+    }
+
+    const studentId = `${branchAbbr}-${nextNumber}`;
+    studentData.studentId = studentId;
+
+    // Add modified_by field
+    studentData.modified_by = user.emp_id;
+
+    const newRegistration = await StudentRegistration.create(studentData);
+
+    res.status(201).json({
+      message: 'Student Registration Created Successfully',
+      student: newRegistration,
+    });
+  } catch (error) {
+    console.error('Error creating student registration:', error);
+    res.status(500).json({
+      error: 'Internal Server Error',
+      details: error.message,
+    });
   }
-
-
+}
+  
   static async getAllStudentRegistrations(req, res) {
     try {
       const {
@@ -200,7 +235,7 @@ class StudentRegistrationController {
         }
       }
 
-      console.log("Generated Query Options:", JSON.stringify(options, null, 2));
+      console.log("Final Sequelize WHERE clause:", JSON.stringify(options.where, null, 2));
 
       // Fetch data
       const { count, rows: registrations } = await StudentRegistration.findAndCountAll(options);
@@ -216,8 +251,6 @@ class StudentRegistrationController {
       res.status(500).json({ error: "Internal Server Error", details: error.message });
     }
   }
-
-
   // Update an existing student registration
   static async updateStudentRegistration(req, res) {
     try {
@@ -263,7 +296,6 @@ class StudentRegistrationController {
       });
     }
   } // Ensure your route uses studentId
-
 }
 
 module.exports = StudentRegistrationController;

@@ -62,6 +62,8 @@ exports.getAllStudents = async (req, res) => {
   }
 };
 
+
+
 // Get a single student by ID
 exports.getStudentByContactNo = async (req, res) => {
   try {

@@ -48,12 +48,20 @@ exports.loginEmployee = async (req, res) => {
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
+    if (employee.role === "BDE" && employee.has_access !== true) {
+      return res.status(403).json({
+        message: "Access denied: This BDE does not have permission to log in.",
+      });
+    }
+
     const token = jwt.sign(
       {
         emp_id: employee.emp_id,
         emp_name: employee.emp_name,
         role: employee.role,
         branch: employee.branch, // ✅ Only branch included
+        has_access: employee.has_access, // ✅ make sure this is here
+
       },
       process.env.JWT_SECRET,
       { expiresIn: "8h" }
@@ -120,6 +128,48 @@ exports.getEmployees = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+
+exports.getBDEEmployees = async (req, res) => {
+  try {
+    const { branch } = req.query;
+
+    if (!branch) {
+      return res.status(400).json({ message: "Branch query parameter is required." });
+    }
+
+    const cleanBranch = branch.replace(/"/g, "");
+
+    const employees = await Employee.findAll({
+      where: Sequelize.where(
+        Sequelize.cast(Sequelize.col("role"), "TEXT"),
+        {
+          [Op.iLike]: "bde"
+        }
+      ),
+      // Branch filter also needs cast if it's enum or json
+      // Assuming it's text or varchar:
+      ...(cleanBranch && {
+        where: {
+          [Op.and]: [
+            Sequelize.where(Sequelize.cast(Sequelize.col("role"), "TEXT"), {
+              [Op.iLike]: "bde",
+            }),
+            Sequelize.where(Sequelize.cast(Sequelize.col("branch"), "TEXT"), {
+              [Op.iLike]: `%${cleanBranch}%`,
+            }),
+          ]
+        }
+      }),
+      attributes: ["emp_id", "emp_name", "branch"],
+    });
+
+    res.status(200).json(employees.map(emp => emp.dataValues));
+  } catch (error) {
+    console.error("Error fetching BDE employees:", error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
 
 // In your routes file
 

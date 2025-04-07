@@ -25,7 +25,7 @@ const authMiddleware = (req, res, next) => {
     console.log("Decoded Token: ", decoded);
 
     // ✅ Validate required fields in the token
-    const { emp_id, branch, role, emp_name } = decoded; // Ensure 'name' is included
+    const { emp_id, branch, role, emp_name, has_access } = decoded; // ✅ include has_access
     if (!emp_id || !branch || !role || !emp_name) {
       return res.status(403).json({ message: "Invalid Token: Missing user details." });
     }
@@ -36,6 +36,8 @@ const authMiddleware = (req, res, next) => {
       branch: Array.isArray(branch) ? branch : [branch],
       role,
       emp_name, // Ensure name is passed forward
+      has_access, // ✅ pass this too
+
     };
 
     next(); // Pass control to the next middleware

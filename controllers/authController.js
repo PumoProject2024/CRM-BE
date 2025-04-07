@@ -28,6 +28,8 @@ exports.login = async (req, res) => {
         email_id: employee.email_id,
         branch: employee.branch, // Ensure branch is included
         emp_name: employee.emp_name, // Ensure the user's name is included here
+        has_access: employee.has_access, // ✅ Add this line
+
 
       },
       process.env.JWT_SECRET,
@@ -43,6 +45,8 @@ exports.login = async (req, res) => {
         role: employee.role,
         branch: employee.branch, // Return branch info to frontend
         email_id: employee.email_id,
+        has_access: employee.has_access, // ✅ Add this line
+
       },
     });
   } catch (error) {
