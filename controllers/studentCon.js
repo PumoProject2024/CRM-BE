@@ -34,11 +34,11 @@ class StudentRegistrationController {
       const studentData = req.body;
       const user = req.user;
       const { preview } = req.query; // New flag to check if we only need the next ID
-  
+
       if (!user) {
         return res.status(401).json({ message: 'Unauthorized' });
       }
-  
+
       // Generate next studentId logic (reusable for both preview and actual creation)
       const generateNextId = async (branch) => {
         const branchAbbr = getBranchAbbreviation(branch);
@@ -46,7 +46,7 @@ class StudentRegistrationController {
           where: { studentId: { [Op.like]: `${branchAbbr}-%` } },
           order: [['studentId', 'DESC']],
         });
-  
+
         let nextNumber = 1001;
         if (lastStudent?.studentId) {
           const lastNumber = parseInt(lastStudent.studentId.split('-')[1], 10);
@@ -54,13 +54,13 @@ class StudentRegistrationController {
         }
         return `${branchAbbr}-${nextNumber}`;
       };
-  
+
       // CASE 1: Only preview next ID (called when branch is selected)
       if (preview === 'true' && studentData.adminbranch) {
         const nextId = await generateNextId(studentData.adminbranch);
         return res.json({ nextId });
       }
-  
+
       // CASE 2: Actual registration (existing logic)
       const { contactNo, course, adminbranch } = studentData;
       if (!contactNo || !course || !adminbranch) {
@@ -68,26 +68,26 @@ class StudentRegistrationController {
           message: 'Contact number, course, and admin branch are required.',
         });
       }
-  
+
       // ... (rest of your existing validation logic) ...
-  
+
       const studentId = await generateNextId(adminbranch);
       studentData.studentId = studentId;
       studentData.modified_by = user.emp_id;
-  
+
       const newRegistration = await StudentRegistration.create(studentData);
-      
+
       res.status(201).json({
         message: 'Registration successful',
         student: newRegistration
       });
-  
+
     } catch (error) {
       console.error('Error:', error);
       res.status(500).json({ error: 'Internal Server Error' });
     }
   }
-  
+
 
   static async getAllStudentRegistrations(req, res) {
     try {
@@ -123,11 +123,15 @@ class StudentRegistrationController {
 
       // Ensure branch filtering
       // ✅ Apply filtering based on role
+      // ✅ Apply filtering based on role
       if (role === "Trainer") {
         options.where.staffAssigned = emp_name;
+      } else if (role === "BDE" && req.user.has_access === false) {
+        options.where.adminEmpName = emp_name;
       } else {
         options.where.adminbranch = { [Op.in]: allowedBranches };
       }
+
 
       if (dueToday === "true") {
         const todayDate = new Date().toISOString().split("T")[0]; // Get YYYY-MM-DD format
@@ -146,7 +150,7 @@ class StudentRegistrationController {
           "courseType", "courseDuration", "classType", "demoGivenBy",
           "registrationPaymentMode", "registrationReferenceNo",
           "adminEmpName", "source", "studentRequestedLocation",
-          "studentRequestedBranch", "adminlocation", "staffAssigned","studentId",
+          "studentRequestedBranch", "adminlocation", "staffAssigned", "studentId",
         ],
         decimalFields: ["courseFees", "feesCollected", "pendingFees", "discountAmount", "pendingFees2"],
         numericFields: ["id", "placementneeded"],
@@ -211,12 +215,21 @@ class StudentRegistrationController {
           options.where[searchField] = isNaN(search) ? null : parseFloat(search);
         } else if (fieldTypes.dateFields.includes(searchField)) {
           const dateSearchCondition = parseDateSearch(search);
-          if (dateSearchCondition) {
-            options.where[searchField] = dateSearchCondition;
-          } else {
+          if (!dateSearchCondition) {
             return res.status(400).json({ error: "Invalid Date Search", message: `Cannot parse date search: ${search}` });
           }
+
+          if (searchField === "pendingFeesDate" || searchField === "pendingFeesDate2") {
+            // Search across both fields
+            options.where[Op.or] = [
+              { pendingFeesDate: dateSearchCondition },
+              { pendingFeesDate2: dateSearchCondition }
+            ];
+          } else {
+            options.where[searchField] = dateSearchCondition;
+          }
         }
+
       }
 
       console.log("Final Sequelize WHERE clause:", JSON.stringify(options.where, null, 2));

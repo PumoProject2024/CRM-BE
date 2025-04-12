@@ -165,6 +165,7 @@ const StudentRegistration = sequelize.define('StudentRegistration', {
   },
   pendingFeesDate: {
     type: DataTypes.DATEONLY,
+    allowNull: true,  // ✅ Allows NULL if needed
     validate: {
       isDate: { msg: "Pending Fees Date must be a valid date" }
     }

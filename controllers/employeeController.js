@@ -48,20 +48,15 @@ exports.loginEmployee = async (req, res) => {
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
-    if (employee.role === "BDE" && employee.has_access !== true) {
-      return res.status(403).json({
-        message: "Access denied: This BDE does not have permission to log in.",
-      });
-    }
+    // ❌ Removed the BDE access check
 
     const token = jwt.sign(
       {
         emp_id: employee.emp_id,
         emp_name: employee.emp_name,
         role: employee.role,
-        branch: employee.branch, // ✅ Only branch included
-        has_access: employee.has_access, // ✅ make sure this is here
-
+        branch: employee.branch,
+        has_access: employee.has_access,
       },
       process.env.JWT_SECRET,
       { expiresIn: "8h" }
@@ -72,6 +67,7 @@ exports.loginEmployee = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+
 
 // Get All Employees
 // employeeController.js
@@ -97,7 +93,7 @@ exports.getEmployees = async (req, res) => {
             Sequelize.literal(`branch::text ILIKE '%${cleanBranch}%'`)
           ],
         },
-        attributes: ["email_id", "emp_id", "role", "location", "branch", "emp_name"],
+        attributes: ["email_id", "emp_id", "role", "location", "branch", "emp_name","has_access"],
       });
 
       console.log(`Sequelize Query Result (${roleFilter}):`, employees);
@@ -112,7 +108,7 @@ exports.getEmployees = async (req, res) => {
     // If no location/branch is provided, return the logged-in user
     const employee = await Employee.findOne({
       where: { emp_id: loggedInUserId },
-      attributes: ["email_id", "emp_id", "role", "location", "branch", "emp_name","contact_num","alter_contact","address"],
+      attributes: ["email_id", "emp_id", "role", "location", "branch", "emp_name","contact_num","alter_contact","address","has_access"],
     });
 
     console.log("Logged-in Employee:", employee);
