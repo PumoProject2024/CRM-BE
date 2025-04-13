@@ -7,6 +7,8 @@ const { getAllCourses,createCourse,updateCourse,deleteCourse, getCourseByNameAnd
 const { getAllLocations } = require('../controllers/locationController');
 const passwordController = require("../controllers/passwordController");
 const studentController = require("../controllers/studentController");
+const { getAllEmployeeDetails } = require("../controllers/employeeController");
+
 
 const router = express.Router();
 
@@ -46,6 +48,7 @@ router.put('/registrations/:studentId', authMiddleware,StudentRegistrationContro
 router.post("/register", employeeController.createEmployee); // Allow first registration without auth
 router.post("/login", employeeController.loginEmployee); // No middleware here
 router.get("/regdetail", authMiddleware, employeeController.getEmployees);
+router.get("/all-employees", getAllEmployeeDetails);
 router.put('/regdetail/update', authMiddleware, employeeController.updateEmployeeProfile);
 router.post('/changepassword', authMiddleware, employeeController.changePassword);
 

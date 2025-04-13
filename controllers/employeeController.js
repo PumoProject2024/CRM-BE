@@ -68,7 +68,6 @@ exports.loginEmployee = async (req, res) => {
   }
 };
 
-
 // Get All Employees
 // employeeController.js
 exports.getEmployees = async (req, res) => {
@@ -124,6 +123,45 @@ exports.getEmployees = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+
+// Get All Employee Details (No filters)
+exports.getAllEmployeeDetails = async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1; // Default to page 1
+    const limit = parseInt(req.query.limit) || 20; // Default 20 per page
+    const offset = (page - 1) * limit;
+
+    // Get all attributes dynamically
+    const attributes = Object.keys(Employee.rawAttributes);
+
+    // Fetch paginated employees
+    const { count, rows: employees } = await Employee.findAndCountAll({
+      attributes,
+      limit,
+      offset,
+      order: [["emp_name", "ASC"]]
+    });
+
+    if (!employees || employees.length === 0) {
+      return res.status(404).json({ message: "No employees found." });
+    }
+
+    const cleanEmployees = employees.map(emp => emp.get({ plain: true }));
+
+    res.status(200).json({
+      total: count,
+      page,
+      totalPages: Math.ceil(count / limit),
+      perPage: limit,
+      data: cleanEmployees,
+    });
+  } catch (error) {
+    console.error("❌ Error in getAllEmployeeDetails:", error);
+    res.status(500).json({ error: "Failed to fetch employee details." });
+  }
+};
+
+
 
 exports.getBDEEmployees = async (req, res) => {
   try {
