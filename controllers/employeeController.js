@@ -161,6 +161,52 @@ exports.getAllEmployeeDetails = async (req, res) => {
   }
 };
 
+exports.updateEmployeeById = async (req, res) => {
+  try {
+    const { emp_id } = req.params;
+    const updateData = req.body;
+
+    // Check if the employee exists
+    const employee = await Employee.findByPk(emp_id);
+
+    if (!employee) {
+      return res.status(404).json({ message: "Employee not found." });
+    }
+
+    // Update the employee with new data
+    await employee.update(updateData);
+
+    res.status(200).json({
+      message: "Employee updated successfully.",
+      data: employee.get({ plain: true }),
+    });
+  } catch (error) {
+    console.error("❌ Error in updateEmployeeById:", error);
+    res.status(500).json({ error: "Failed to update employee." });
+  }
+};
+
+exports.deleteEmployeeById = async (req, res) => {
+  try {
+    const { emp_id } = req.params;
+
+    // Find employee by primary key
+    const employee = await Employee.findByPk(emp_id);
+
+    if (!employee) {
+      return res.status(404).json({ message: "Employee not found." });
+    }
+
+    // Delete the employee
+    await employee.destroy();
+
+    res.status(200).json({ message: "Employee deleted successfully." });
+  } catch (error) {
+    console.error("❌ Error in deleteEmployeeById:", error);
+    res.status(500).json({ error: "Failed to delete employee." });
+  }
+};
+
 
 
 exports.getBDEEmployees = async (req, res) => {

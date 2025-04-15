@@ -51,6 +51,9 @@ router.get("/regdetail", authMiddleware, employeeController.getEmployees);
 router.get("/all-employees", getAllEmployeeDetails);
 router.put('/regdetail/update', authMiddleware, employeeController.updateEmployeeProfile);
 router.post('/changepassword', authMiddleware, employeeController.changePassword);
+router.put("/employees/:emp_id", employeeController.updateEmployeeById);
+router.delete("/employees/:emp_id", employeeController.deleteEmployeeById);
+
 
 
 

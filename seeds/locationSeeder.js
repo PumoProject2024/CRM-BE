@@ -23,6 +23,8 @@ async function seedLocationData() {
       // Coimbatore branches
       { location: "Coimbatore", branch: "Gandhipuram" },
       { location: "Coimbatore", branch: "Malumichampatti" },
+      { location: "Coimbatore", branch: "Saravanampatti" },
+
       
       // Hosur branches
       { location: "Hosur", branch: "Hamumanthapuram" }
