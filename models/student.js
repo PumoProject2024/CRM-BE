@@ -101,7 +101,20 @@ const Student = sequelize.define('Student', {
   course: {
     type: DataTypes.STRING,
     allowNull: true
+  },
+  follow_up: {
+    type: DataTypes.DATEONLY,
+    allowNull: true
+  },
+  admin_feedback: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+  enrollment_status: {
+    type: DataTypes.STRING,
+    allowNull: true
   }
+
 }, {
   tableName: 'students',
   timestamps: true

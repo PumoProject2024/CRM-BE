@@ -10,13 +10,15 @@ const studentController = require("../controllers/studentController");
 const { getAllEmployeeDetails } = require("../controllers/employeeController");
 
 
+
 const router = express.Router();
 
 // POST route to create a new student registration
 router.get('/location', getAllLocations);
 
 router.post("/student", studentController.createStudent);
-router.get("/students", studentController.getAllStudents);
+router.get("/students", authMiddleware,studentController.getAllStudents);
+router.put('/students/:id', authMiddleware, studentController.updateStudent);
 router.get("/students/:contactNo", studentController.getStudentByContactNo);
 router.get('/bde-employees',employeeController.getBDEEmployees);
 

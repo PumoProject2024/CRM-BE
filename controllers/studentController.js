@@ -1,4 +1,4 @@
-const { Op } = require('sequelize');
+const { Op, fn, col, where: whereSequelize } = require("sequelize");
 const { Student } = require('../models/student');
 
 // Create a new student
@@ -23,25 +23,101 @@ exports.createStudent = async (req, res) => {
 // Get all students with optional filtering
 exports.getAllStudents = async (req, res) => {
   try {
-    const { 
-      branch, studentStatus, educationLevel, 
-      batch, learningMode, page = 1, limit = 10 
+    const {
+      branch,
+      createdToday,
+      followUpToday,
+      search = '',
+      page = 1,
+      limit = 10,
+      ...filters
     } = req.query;
-    
-    const offset = (page - 1) * limit;
+
+    const offset = (page - 1) * parseInt(limit);
+    const user = req.user;
+
+    if (!user || !user.emp_name) {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied: Invalid user information",
+      });
+    }
+
     const where = {};
-    
-    if (branch) where.branch = branch;
-    if (studentStatus) where.studentStatus = studentStatus;
-    if (educationLevel) where.educationLevel = educationLevel;
-    if (batch) where.batch = batch;
-    if (learningMode) where.learningMode = learningMode;
+    const { emp_name, has_access, branch: userBranch } = user;
+
+    // Branch-based access control
+    if (has_access === true) {
+      if (branch) {
+        where.branch = branch;
+      } else if (Array.isArray(userBranch)) {
+        where.branch = { [Op.in]: userBranch };
+      } else {
+        where.branch = userBranch;
+      }
+    } else {
+      where.adminName = emp_name;
+    }
+
+    // Filter for today's created records
+    if (createdToday === 'true') {
+      const todayDateOnly = new Date().toISOString().split('T')[0];
+      where[Op.and] = [
+        ...(where[Op.and] || []),
+        whereSequelize(fn('DATE', col('createdAt')), todayDateOnly),
+      ];
+    }
+
+    // Filter for today's follow_up
+    if (followUpToday === 'true') {
+      const todayDateOnly = new Date().toISOString().split('T')[0];
+      where[Op.and] = [
+        ...(where[Op.and] || []),
+        whereSequelize(fn('DATE', col('follow_up')), todayDateOnly),
+      ];
+    }
+
+    // Global search
+    if (search.trim() !== '') {
+      const searchLower = search.toLowerCase();
+      where[Op.and] = [
+        ...(where[Op.and] || []),
+        {
+          [Op.or]: [
+            { name: { [Op.iLike]: `%${searchLower}%` } },
+            { email_Id: { [Op.iLike]: `%${searchLower}%` } },
+            { contactNo: { [Op.iLike]: `%${searchLower}%` } },
+            { department: { [Op.iLike]: `%${searchLower}%` } },
+            { enrollment_status: { [Op.iLike]: `%${searchLower}%` } },
+            { educationLevel: { [Op.iLike]: `%${searchLower}%` } },
+            { educationCourse: { [Op.iLike]: `%${searchLower}%` } },
+            { course: { [Op.iLike]: `%${searchLower}%` } },
+            { studentStatus: { [Op.iLike]: `%${searchLower}%` } },
+            { branch: { [Op.iLike]: `%${searchLower}%` } },
+            { adminName: { [Op.iLike]: `%${searchLower}%` } },
+            { studentRequirement: { [Op.iLike]: `%${searchLower}%` } },
+            { admin_feedback: { [Op.iLike]: `%${searchLower}%` } },
+            { classType: { [Op.iLike]: `%${searchLower}%` } },
+            { batch: { [Op.iLike]: `%${searchLower}%` } },
+            { learningMode: { [Op.iLike]: `%${searchLower}%` } },
+            { courseType: { [Op.iLike]: `%${searchLower}%` } },
+          ],
+        },
+      ];
+    }
+
+    // Apply other dynamic filters
+    for (let filter in filters) {
+      if (filters[filter]) {
+        where[filter] = filters[filter];
+      }
+    }
 
     const students = await Student.findAndCountAll({
       where,
       limit: parseInt(limit),
-      offset: offset,
-      order: [['createdAt', 'DESC']]
+      offset,
+      order: [['createdAt', 'DESC']],
     });
 
     res.status(200).json({
@@ -50,19 +126,18 @@ exports.getAllStudents = async (req, res) => {
       pagination: {
         totalItems: students.count,
         totalPages: Math.ceil(students.count / limit),
-        currentPage: parseInt(page)
-      }
+        currentPage: parseInt(page),
+      },
     });
   } catch (error) {
+    console.error("Error in getAllStudents:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to fetch students',
-      error: error.message
+      message: "Failed to fetch students",
+      error: error.message,
     });
   }
 };
-
-
 
 // Get a single student by ID
 exports.getStudentByContactNo = async (req, res) => {

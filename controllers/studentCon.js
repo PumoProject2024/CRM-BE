@@ -3,16 +3,22 @@ const StudentRegistration = require('../models/studenReg');
 
 // Add this utility function (can be in a separate utils file or at the top of your controller)
 const BRANCH_ABBREVIATIONS = {
-  "Tambaram": "TBR",
-  "Velachery": "VLY",
-  "Vadapalani": "VPL",
-  "Poonamallee": "PNM",
-  "Marathahalli": "MHY",
-  "Gandhipuram": "GPR",
-  "Malumichampatti": "MMP",
-  "Hamumanthapuram": "HMP",
-
+  "Tambaram": "TM",
+  "Velachery": "VL",
+  "Vadapalani": "VP",
+  "Poonamallee": "PM",
+  "Marathahalli": "MH",
+  "Gandhipuram": "GP",
+  "Malumichampatti": "MP",
+  "Hamumanthapuram": "HP",
   // Add more as needed
+};
+
+const COURSE_TYPE_ABBREVIATIONS = {
+  "CADD": "CD",
+  "Pumo Tech": "PT",
+  "Monz Creative School": "MZ",
+
 };
 
 const getBranchAbbreviation = (branchName) => {
@@ -23,8 +29,20 @@ const getBranchAbbreviation = (branchName) => {
     return BRANCH_ABBREVIATIONS[branchName];
   }
 
-  // Fallback: first 3 letters uppercase
-  return branchName.substring(0, 3).toUpperCase();
+  // Fallback: first 2 letters uppercase
+  return branchName.substring(0, 2).toUpperCase();
+};
+
+const getCourseTypeAbbreviation = (courseType) => {
+  if (!courseType) return "CR"; // Default to "Course" if none specified
+  
+  // Check if we have a predefined abbreviation
+  if (COURSE_TYPE_ABBREVIATIONS[courseType]) {
+    return COURSE_TYPE_ABBREVIATIONS[courseType];
+  }
+  
+  // Fallback: first 2 letters uppercase
+  return courseType.substring(0, 2).toUpperCase();
 };
 
 class StudentRegistrationController {
@@ -33,36 +51,53 @@ class StudentRegistrationController {
     try {
       const studentData = req.body;
       const user = req.user;
-      const { preview } = req.query; // New flag to check if we only need the next ID
+      const { preview } = req.query; // Flag to check if we only need the next ID
 
       if (!user) {
         return res.status(401).json({ message: 'Unauthorized' });
       }
 
-      // Generate next studentId logic (reusable for both preview and actual creation)
-      const generateNextId = async (branch) => {
+      // Generate next studentId logic with course type included
+      const generateNextId = async (branch, courseType) => {
         const branchAbbr = getBranchAbbreviation(branch);
+        const courseAbbr = getCourseTypeAbbreviation(courseType || 'Course');
+        
+        // Look for the last student with this branch and course type combination
+        const idPattern = `${courseAbbr}-${branchAbbr}-%`;
+        
         const lastStudent = await StudentRegistration.findOne({
-          where: { studentId: { [Op.like]: `${branchAbbr}-%` } },
+          where: { studentId: { [Op.like]: idPattern } },
           order: [['studentId', 'DESC']],
         });
 
         let nextNumber = 1001;
         if (lastStudent?.studentId) {
-          const lastNumber = parseInt(lastStudent.studentId.split('-')[1], 10);
-          if (!isNaN(lastNumber)) nextNumber = lastNumber + 1;
+          // Extract number from the last part of the ID (e.g., "CD-VL-1001" -> "1001")
+          const parts = lastStudent.studentId.split('-');
+          if (parts.length === 3) {
+            const lastNumber = parseInt(parts[2], 10);
+            if (!isNaN(lastNumber)) nextNumber = lastNumber + 1;
+          }
         }
-        return `${branchAbbr}-${nextNumber}`;
+        
+        return `${courseAbbr}-${branchAbbr}-${nextNumber}`;
       };
 
       // CASE 1: Only preview next ID (called when branch is selected)
-      if (preview === 'true' && studentData.adminbranch) {
-        const nextId = await generateNextId(studentData.adminbranch);
+      if (preview === 'true') {
+        if (!studentData.adminbranch) {
+          return res.status(400).json({ message: 'Admin branch is required for ID generation' });
+        }
+        
+        // Use the provided course type or default to "Course"
+        const courseType = studentData.courseType || 'Course';
+        const nextId = await generateNextId(studentData.adminbranch, courseType);
+        
         return res.json({ nextId });
       }
 
-      // CASE 2: Actual registration (existing logic)
-      const { contactNo, course, adminbranch } = studentData;
+      // CASE 2: Actual registration (existing logic with updated ID generation)
+      const { contactNo, course, adminbranch, courseType } = studentData;
       if (!contactNo || !course || !adminbranch) {
         return res.status(400).json({
           message: 'Contact number, course, and admin branch are required.',
@@ -71,7 +106,8 @@ class StudentRegistrationController {
 
       // ... (rest of your existing validation logic) ...
 
-      const studentId = await generateNextId(adminbranch);
+      // Generate student ID with course type
+      const studentId = await generateNextId(adminbranch, courseType || 'Course');
       studentData.studentId = studentId;
       studentData.modified_by = user.emp_id;
 
@@ -87,8 +123,7 @@ class StudentRegistrationController {
       res.status(500).json({ error: 'Internal Server Error' });
     }
   }
-
-
+  
   static async getAllStudentRegistrations(req, res) {
     try {
       const {
