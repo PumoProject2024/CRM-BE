@@ -104,8 +104,6 @@ class StudentRegistrationController {
         });
       }
 
-      // ... (rest of your existing validation logic) ...
-
       // Generate student ID with course type
       const studentId = await generateNextId(adminbranch, courseType || 'Course');
       studentData.studentId = studentId;
@@ -123,7 +121,7 @@ class StudentRegistrationController {
       res.status(500).json({ error: 'Internal Server Error' });
     }
   }
-  
+
   static async getAllStudentRegistrations(req, res) {
     try {
       const {

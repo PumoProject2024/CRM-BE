@@ -185,6 +185,36 @@ const StudentRegistration = sequelize.define('StudentRegistration', {
       isDate: { msg: "Pending Fees Date must be a valid date" }
     }
   },
+  pendingFees3: {
+    type: DataTypes.DECIMAL(10, 2),
+    allowNull: true,  // ✅ Allows NULL if needed
+    validate: {
+      isDecimal: { msg: "Pending Fees should be a decimal number" },
+      min: { args: [0], msg: "Pending Fees cannot be negative" }
+    }
+  },
+  pendingFeesDate3: {
+    type: DataTypes.DATEONLY,
+    allowNull: true,  // ✅ Allows NULL if needed
+    validate: {
+      isDate: { msg: "Pending Fees Date must be a valid date" }
+    }
+  },
+  pendingFees4: {
+    type: DataTypes.DECIMAL(10, 2),
+    allowNull: true,  // ✅ Allows NULL if needed
+    validate: {
+      isDecimal: { msg: "Pending Fees should be a decimal number" },
+      min: { args: [0], msg: "Pending Fees cannot be negative" }
+    }
+  },
+  pendingFeesDate4: {
+    type: DataTypes.DATEONLY,
+    allowNull: true,  // ✅ Allows NULL if needed
+    validate: {
+      isDate: { msg: "Pending Fees Date must be a valid date" }
+    }
+  },
   source: {
     type: DataTypes.STRING
   },
