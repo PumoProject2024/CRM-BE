@@ -170,7 +170,10 @@ class StudentRegistrationController {
         const todayDate = new Date().toISOString().split("T")[0]; // Get YYYY-MM-DD format
         options.where[Op.or] = [
           { pendingFeesDate: { [Op.eq]: Sequelize.literal(`'${todayDate}'::date`) } },
-          { pendingFeesDate2: { [Op.eq]: Sequelize.literal(`'${todayDate}'::date`) } }
+          { pendingFeesDate2: { [Op.eq]: Sequelize.literal(`'${todayDate}'::date`) } },
+          { pendingFeesDate3: { [Op.eq]: Sequelize.literal(`'${todayDate}'::date`) } },
+          { pendingFeesDate4: { [Op.eq]: Sequelize.literal(`'${todayDate}'::date`) } },
+
         ];
       }
 
@@ -185,9 +188,9 @@ class StudentRegistrationController {
           "adminEmpName", "source", "studentRequestedLocation",
           "studentRequestedBranch", "adminlocation", "staffAssigned", "studentId",
         ],
-        decimalFields: ["courseFees", "feesCollected", "pendingFees", "discountAmount", "pendingFees2"],
+        decimalFields: ["courseFees", "feesCollected", "pendingFees", "discountAmount", "pendingFees2","pendingFees3","pendingFees4"],
         numericFields: ["id", "placementneeded"],
-        dateFields: ["dob", "demoGivenDate", "dateOfAdmission", "pendingFeesDate", "pendingFeesDate2"]
+        dateFields: ["dob", "demoGivenDate", "dateOfAdmission", "pendingFeesDate", "pendingFeesDate2","pendingFeesDate3","pendingFeesDate4"]
       };
 
       // Validate searchField
@@ -196,47 +199,93 @@ class StudentRegistrationController {
       }
 
       // Function to handle date searching
-      const parseDateSearch = (search) => {
-        if (!search || search.trim() === "") return null;
+    // Function to handle date searching - improved version
+const parseDateSearch = (search) => {
+  if (!search || search.trim() === "") return null;
 
-        if (search.length < 4) {
-          return {
-            [Op.or]: [
-              Sequelize.where(Sequelize.fn('extract', Sequelize.literal('year from "pendingFeesDate"')), parseInt(search)),
-              Sequelize.where(Sequelize.fn('extract', Sequelize.literal('month from "pendingFeesDate"')), parseInt(search)),
-              Sequelize.where(Sequelize.fn('extract', Sequelize.literal('day from "pendingFeesDate"')), parseInt(search))
-            ]
-          };
-        }
+  // Handle simple year, month, or day search (single numbers)
+  if (/^\d{1,4}$/.test(search)) {
+    const num = parseInt(search, 10);
+    return {
+      [Op.or]: [
+        Sequelize.where(Sequelize.fn('extract', Sequelize.literal('year from "pendingFeesDate"')), num),
+        Sequelize.where(Sequelize.fn('extract', Sequelize.literal('month from "pendingFeesDate"')), num),
+        Sequelize.where(Sequelize.fn('extract', Sequelize.literal('day from "pendingFeesDate"')), num)
+      ]
+    };
+  }
 
-        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-        if (dateRegex.test(search)) {
-          return { [Op.eq]: Sequelize.literal(`'${search}'::date`) };
-        }
+  // Complete date format (YYYY-MM-DD)
+  const fullDateRegex = /^\d{4}-\d{2}-\d{2}$/;
+  if (fullDateRegex.test(search)) {
+    return { [Op.eq]: Sequelize.literal(`'${search}'::date`) };
+  }
 
-        const partialDateRegex = /^(\d{4})(?:-(\d{1,2}))?(?:-(\d{1,2}))?$/;
-        const match = search.match(partialDateRegex);
+  // Handle partial date formats
+  let year, month, day;
+  
+  // Year only (YYYY-)
+  if (/^\d{4}-$/.test(search)) {
+    year = parseInt(search.substring(0, 4), 10);
+    return Sequelize.where(
+      Sequelize.fn('extract', Sequelize.literal('year from "pendingFeesDate"')),
+      year
+    );
+  }
+  
+  // Year and month (YYYY-MM-)
+  if (/^\d{4}-\d{1,2}-?$/.test(search)) {
+    const parts = search.split('-');
+    year = parseInt(parts[0], 10);
+    month = parts[1] ? parseInt(parts[1], 10) : null;
+    
+    let conditions = [
+      Sequelize.where(Sequelize.fn('extract', Sequelize.literal('year from "pendingFeesDate"')), year)
+    ];
+    
+    if (month !== null) {
+      conditions.push(
+        Sequelize.where(Sequelize.fn('extract', Sequelize.literal('month from "pendingFeesDate"')), month)
+      );
+    }
+    
+    return { [Op.and]: conditions };
+  }
+  
+  // Partial date with some components (handles various formats more flexibly)
+  const partialDateRegex = /^(\d{4})(?:-(\d{1,2}))?(?:-(\d{1,2}))?$/;
+  const match = search.match(partialDateRegex);
+  
+  if (match) {
+    const [, yearStr, monthStr, dayStr] = match;
+    let conditions = [];
+    
+    if (yearStr) {
+      year = parseInt(yearStr, 10);
+      conditions.push(
+        Sequelize.where(Sequelize.fn('extract', Sequelize.literal('year from "pendingFeesDate"')), year)
+      );
+    }
+    
+    if (monthStr) {
+      month = parseInt(monthStr, 10);
+      conditions.push(
+        Sequelize.where(Sequelize.fn('extract', Sequelize.literal('month from "pendingFeesDate"')), month)
+      );
+    }
+    
+    if (dayStr) {
+      day = parseInt(dayStr, 10);
+      conditions.push(
+        Sequelize.where(Sequelize.fn('extract', Sequelize.literal('day from "pendingFeesDate"')), day)
+      );
+    }
+    
+    return conditions.length > 0 ? { [Op.and]: conditions } : null;
+  }
 
-        if (match) {
-          const [, year, , month, , day] = match;
-          let conditions = [];
-
-          if (year) {
-            conditions.push(Sequelize.where(Sequelize.fn('extract', Sequelize.literal('year from "pendingFeesDate"')), parseInt(year)));
-          }
-          if (month && month.length === 2) {  // Ensure valid MM
-            conditions.push(Sequelize.where(Sequelize.fn('extract', Sequelize.literal('month from "pendingFeesDate"')), parseInt(month)));
-          }
-          if (day && day.length === 2) {  // Ensure valid DD
-            conditions.push(Sequelize.where(Sequelize.fn('extract', Sequelize.literal('day from "pendingFeesDate"')), parseInt(day)));
-          }
-
-          return { [Op.and]: conditions };
-        }
-
-
-        return null;
-      };
+  return null;
+};
 
       // Apply search filter if present
       if (search && searchField) {
