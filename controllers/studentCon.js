@@ -130,33 +130,32 @@ class StudentRegistrationController {
         search,
         searchField,
         dueToday,
+        todaysAdmission, // New parameter for today's admission filter
         todayPendingFees,
         ...filters
       } = req.query;
-
+  
       const pageNum = parseInt(page, 10);
       const limitNum = parseInt(limit, 10);
-
+  
       const options = {
         where: {},
         limit: limitNum,
         offset: (pageNum - 1) * limitNum,
         order: [["name", "ASC"]],
       };
-
+  
       // Extract allowed branches from user
       const { role, emp_name, branch: allowedBranches } = req.user;
-
+  
       if (!role || !emp_name) {
         return res.status(403).json({ message: "Access denied: User role or emp_name is missing" });
       }
       if (!allowedBranches || allowedBranches.length === 0) {
         return res.status(403).json({ message: "Access denied: No branch assigned" });
       }
-
+  
       // Ensure branch filtering
-      // ✅ Apply filtering based on role
-      // ✅ Apply filtering based on role
       if (role === "Trainer") {
         options.where.staffAssigned = emp_name;
       } else if (role === "BDE" && req.user.has_access === false) {
@@ -164,8 +163,8 @@ class StudentRegistrationController {
       } else {
         options.where.adminbranch = { [Op.in]: allowedBranches };
       }
-
-
+  
+      // Filter for payments due today
       if (dueToday === "true") {
         const todayDate = new Date().toISOString().split("T")[0]; // Get YYYY-MM-DD format
         options.where[Op.or] = [
@@ -173,11 +172,19 @@ class StudentRegistrationController {
           { pendingFeesDate2: { [Op.eq]: Sequelize.literal(`'${todayDate}'::date`) } },
           { pendingFeesDate3: { [Op.eq]: Sequelize.literal(`'${todayDate}'::date`) } },
           { pendingFeesDate4: { [Op.eq]: Sequelize.literal(`'${todayDate}'::date`) } },
-
         ];
       }
-
-
+  
+      // Filter for today's admissions
+      if (todaysAdmission === "true") {
+        const todayDate = new Date().toISOString().split("T")[0];
+        options.where = {
+          ...options.where,
+          dateOfAdmission: { [Op.eq]: Sequelize.literal(`'${todayDate}'::date`) }
+        };
+      }
+      
+  
       // Comprehensive field categorization
       const fieldTypes = {
         stringFields: [
@@ -192,101 +199,100 @@ class StudentRegistrationController {
         numericFields: ["id", "placementneeded"],
         dateFields: ["dob", "demoGivenDate", "dateOfAdmission", "pendingFeesDate", "pendingFeesDate2","pendingFeesDate3","pendingFeesDate4"]
       };
-
+  
       // Validate searchField
       if (searchField && !Object.values(fieldTypes).flat().includes(searchField)) {
         return res.status(400).json({ error: "Invalid search field" });
       }
-
-      // Function to handle date searching
-    // Function to handle date searching - improved version
-const parseDateSearch = (search) => {
-  if (!search || search.trim() === "") return null;
-
-  // Handle simple year, month, or day search (single numbers)
-  if (/^\d{1,4}$/.test(search)) {
-    const num = parseInt(search, 10);
-    return {
-      [Op.or]: [
-        Sequelize.where(Sequelize.fn('extract', Sequelize.literal('year from "pendingFeesDate"')), num),
-        Sequelize.where(Sequelize.fn('extract', Sequelize.literal('month from "pendingFeesDate"')), num),
-        Sequelize.where(Sequelize.fn('extract', Sequelize.literal('day from "pendingFeesDate"')), num)
-      ]
-    };
-  }
-
-  // Complete date format (YYYY-MM-DD)
-  const fullDateRegex = /^\d{4}-\d{2}-\d{2}$/;
-  if (fullDateRegex.test(search)) {
-    return { [Op.eq]: Sequelize.literal(`'${search}'::date`) };
-  }
-
-  // Handle partial date formats
-  let year, month, day;
   
-  // Year only (YYYY-)
-  if (/^\d{4}-$/.test(search)) {
-    year = parseInt(search.substring(0, 4), 10);
-    return Sequelize.where(
-      Sequelize.fn('extract', Sequelize.literal('year from "pendingFeesDate"')),
-      year
-    );
-  }
+      // Function to handle date searching - improved version
+      const parseDateSearch = (search) => {
+        if (!search || search.trim() === "") return null;
   
-  // Year and month (YYYY-MM-)
-  if (/^\d{4}-\d{1,2}-?$/.test(search)) {
-    const parts = search.split('-');
-    year = parseInt(parts[0], 10);
-    month = parts[1] ? parseInt(parts[1], 10) : null;
-    
-    let conditions = [
-      Sequelize.where(Sequelize.fn('extract', Sequelize.literal('year from "pendingFeesDate"')), year)
-    ];
-    
-    if (month !== null) {
-      conditions.push(
-        Sequelize.where(Sequelize.fn('extract', Sequelize.literal('month from "pendingFeesDate"')), month)
-      );
-    }
-    
-    return { [Op.and]: conditions };
-  }
+        // Handle simple year, month, or day search (single numbers)
+        if (/^\d{1,4}$/.test(search)) {
+          const num = parseInt(search, 10);
+          return {
+            [Op.or]: [
+              Sequelize.where(Sequelize.fn('extract', Sequelize.literal('year from "pendingFeesDate"')), num),
+              Sequelize.where(Sequelize.fn('extract', Sequelize.literal('month from "pendingFeesDate"')), num),
+              Sequelize.where(Sequelize.fn('extract', Sequelize.literal('day from "pendingFeesDate"')), num)
+            ]
+          };
+        }
   
-  // Partial date with some components (handles various formats more flexibly)
-  const partialDateRegex = /^(\d{4})(?:-(\d{1,2}))?(?:-(\d{1,2}))?$/;
-  const match = search.match(partialDateRegex);
+        // Complete date format (YYYY-MM-DD)
+        const fullDateRegex = /^\d{4}-\d{2}-\d{2}$/;
+        if (fullDateRegex.test(search)) {
+          return { [Op.eq]: Sequelize.literal(`'${search}'::date`) };
+        }
   
-  if (match) {
-    const [, yearStr, monthStr, dayStr] = match;
-    let conditions = [];
-    
-    if (yearStr) {
-      year = parseInt(yearStr, 10);
-      conditions.push(
-        Sequelize.where(Sequelize.fn('extract', Sequelize.literal('year from "pendingFeesDate"')), year)
-      );
-    }
-    
-    if (monthStr) {
-      month = parseInt(monthStr, 10);
-      conditions.push(
-        Sequelize.where(Sequelize.fn('extract', Sequelize.literal('month from "pendingFeesDate"')), month)
-      );
-    }
-    
-    if (dayStr) {
-      day = parseInt(dayStr, 10);
-      conditions.push(
-        Sequelize.where(Sequelize.fn('extract', Sequelize.literal('day from "pendingFeesDate"')), day)
-      );
-    }
-    
-    return conditions.length > 0 ? { [Op.and]: conditions } : null;
-  }
-
-  return null;
-};
-
+        // Handle partial date formats
+        let year, month, day;
+        
+        // Year only (YYYY-)
+        if (/^\d{4}-$/.test(search)) {
+          year = parseInt(search.substring(0, 4), 10);
+          return Sequelize.where(
+            Sequelize.fn('extract', Sequelize.literal('year from "pendingFeesDate"')),
+            year
+          );
+        }
+        
+        // Year and month (YYYY-MM-)
+        if (/^\d{4}-\d{1,2}-?$/.test(search)) {
+          const parts = search.split('-');
+          year = parseInt(parts[0], 10);
+          month = parts[1] ? parseInt(parts[1], 10) : null;
+          
+          let conditions = [
+            Sequelize.where(Sequelize.fn('extract', Sequelize.literal('year from "pendingFeesDate"')), year)
+          ];
+          
+          if (month !== null) {
+            conditions.push(
+              Sequelize.where(Sequelize.fn('extract', Sequelize.literal('month from "pendingFeesDate"')), month)
+            );
+          }
+          
+          return { [Op.and]: conditions };
+        }
+        
+        // Partial date with some components (handles various formats more flexibly)
+        const partialDateRegex = /^(\d{4})(?:-(\d{1,2}))?(?:-(\d{1,2}))?$/;
+        const match = search.match(partialDateRegex);
+        
+        if (match) {
+          const [, yearStr, monthStr, dayStr] = match;
+          let conditions = [];
+          
+          if (yearStr) {
+            year = parseInt(yearStr, 10);
+            conditions.push(
+              Sequelize.where(Sequelize.fn('extract', Sequelize.literal('year from "pendingFeesDate"')), year)
+            );
+          }
+          
+          if (monthStr) {
+            month = parseInt(monthStr, 10);
+            conditions.push(
+              Sequelize.where(Sequelize.fn('extract', Sequelize.literal('month from "pendingFeesDate"')), month)
+            );
+          }
+          
+          if (dayStr) {
+            day = parseInt(dayStr, 10);
+            conditions.push(
+              Sequelize.where(Sequelize.fn('extract', Sequelize.literal('day from "pendingFeesDate"')), day)
+            );
+          }
+          
+          return conditions.length > 0 ? { [Op.and]: conditions } : null;
+        }
+  
+        return null;
+      };
+  
       // Apply search filter if present
       if (search && searchField) {
         if (fieldTypes.stringFields.includes(searchField)) {
@@ -300,7 +306,7 @@ const parseDateSearch = (search) => {
           if (!dateSearchCondition) {
             return res.status(400).json({ error: "Invalid Date Search", message: `Cannot parse date search: ${search}` });
           }
-
+  
           if (searchField === "pendingFeesDate" || searchField === "pendingFeesDate2") {
             // Search across both fields
             options.where[Op.or] = [
@@ -311,14 +317,23 @@ const parseDateSearch = (search) => {
             options.where[searchField] = dateSearchCondition;
           }
         }
-
       }
-
+  
+      if (filters.location && filters.location !== 'All') {
+        options.where.adminlocation = filters.location;
+      }
+      if (filters.branch && filters.branch !== 'All') {
+        options.where.adminbranch = filters.branch;
+      }
+      if (filters.courseType && filters.courseType !== 'All') {
+        options.where.courseType = filters.courseType;
+      }
+  
       console.log("Final Sequelize WHERE clause:", JSON.stringify(options.where, null, 2));
-
+  
       // Fetch data
       const { count, rows: registrations } = await StudentRegistration.findAndCountAll(options);
-
+  
       res.status(200).json({
         totalRegistrations: count,
         totalPages: Math.ceil(count / limitNum),
