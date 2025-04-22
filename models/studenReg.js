@@ -38,6 +38,10 @@ const StudentRegistration = sequelize.define('StudentRegistration', {
       len: { args: [10, 15], msg: "Contact number should be between 10 to 15 digits" }
     }
   },
+  ParentNo:{
+    type:DataTypes.STRING,
+    allowNull:true,
+  },
   address: {
     type: DataTypes.TEXT,
     validate: {

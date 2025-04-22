@@ -3,7 +3,7 @@ const StudentRegistration = require('../models/studenReg');
 
 exports.createInvoice = async (req, res) => {
   try {
-    const { studentId, receipt_no, registrationPaymentMode, registrationReferenceNo, amount, cgst, sgst, paidAmount, paymentDate } = req.body;
+    const { studentId, receipt_no, registrationPaymentMode, registrationReferenceNo, amount, cgst, sgst, paidAmount, paymentDate,bank } = req.body;
 
     // Ensure the logged-in user's data is available from authMiddleware
     const { emp_id, emp_name } = req.user || {};
@@ -53,6 +53,7 @@ exports.createInvoice = async (req, res) => {
         paymentDate,
         paymentInstallment: nextInstallment,
         modified_by: emp_id,
+        bank,
       });
 
       res.status(201).json({

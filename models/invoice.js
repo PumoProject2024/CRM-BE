@@ -50,6 +50,10 @@ const Invoice = sequelize.define('Invoice', {
     type: DataTypes.DATE,
     allowNull: false
   },
+  bank: {
+    type: DataTypes.STRING,
+    allowNull:true
+  },
   modified_by: {
     type: DataTypes.STRING
   },
