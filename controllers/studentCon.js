@@ -61,27 +61,27 @@ class StudentRegistrationController {
       const generateNextId = async (branch, courseType) => {
         const branchAbbr = getBranchAbbreviation(branch);
         const courseAbbr = getCourseTypeAbbreviation(courseType || 'Course');
-        
-        // Look for the last student with this branch and course type combination
-        const idPattern = `${courseAbbr}-${branchAbbr}-%`;
-        
+      
+        // Only filter by branchAbbr for number tracking
+        const idPattern = `%-${branchAbbr}-%`;
+      
         const lastStudent = await StudentRegistration.findOne({
           where: { studentId: { [Op.like]: idPattern } },
           order: [['studentId', 'DESC']],
         });
-
+      
         let nextNumber = 1001;
         if (lastStudent?.studentId) {
-          // Extract number from the last part of the ID (e.g., "CD-VL-1001" -> "1001")
           const parts = lastStudent.studentId.split('-');
           if (parts.length === 3) {
             const lastNumber = parseInt(parts[2], 10);
             if (!isNaN(lastNumber)) nextNumber = lastNumber + 1;
           }
         }
-        
+      
         return `${courseAbbr}-${branchAbbr}-${nextNumber}`;
       };
+      
 
       // CASE 1: Only preview next ID (called when branch is selected)
       if (preview === 'true') {
