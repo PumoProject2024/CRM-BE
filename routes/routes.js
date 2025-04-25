@@ -8,6 +8,8 @@ const { getAllLocations } = require('../controllers/locationController');
 const passwordController = require("../controllers/passwordController");
 const studentController = require("../controllers/studentController");
 const { getAllEmployeeDetails } = require("../controllers/employeeController");
+const { getAllInvoices } = require('../controllers/invoiceController');
+
 
 
 
@@ -40,6 +42,7 @@ router.get('/courses/:courseName/:courseType', getCourseByNameAndType);
 router.post('/registrations',authMiddleware ,StudentRegistrationController.createStudentRegistration);
 router.post('/invoices', authMiddleware,createInvoice);
 router.get('/invoices',getInvoices);
+router.get('/all-invoices',authMiddleware,getAllInvoices);
 
 
 // GET route to fetch all student registrations

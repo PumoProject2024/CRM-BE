@@ -132,6 +132,8 @@ class StudentRegistrationController {
         dueToday,
         todaysAdmission, // New parameter for today's admission filter
         todayPendingFees,
+        fromDate, // New parameter for date range start
+        toDate,
         ...filters
       } = req.query;
   
@@ -181,6 +183,23 @@ class StudentRegistrationController {
         options.where = {
           ...options.where,
           dateOfAdmission: { [Op.eq]: Sequelize.literal(`'${todayDate}'::date`) }
+        };
+      }
+
+      if (fromDate && toDate) {
+        // Ensure dates are properly formatted
+        const validFromDate = new Date(fromDate).toISOString().split("T")[0];
+        const validToDate = new Date(toDate).toISOString().split("T")[0];
+        
+        // Add date range filter to the query
+        options.where = {
+          ...options.where,
+          dateOfAdmission: { 
+            [Op.between]: [
+              Sequelize.literal(`'${validFromDate}'::date`),
+              Sequelize.literal(`'${validToDate}'::date`)
+            ] 
+          }
         };
       }
       

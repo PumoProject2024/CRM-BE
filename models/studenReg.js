@@ -129,7 +129,7 @@ const StudentRegistration = sequelize.define('StudentRegistration', {
     type: DataTypes.STRING,
     validate: {
       isIn: {
-        args: [['cash', 'Credit Card', 'Debit Card', 'Online', 'Loan']],
+        args: [['Cash', 'Card payments','Online', 'Loan']],
         msg: "Invalid payment mode"
       }
     }
