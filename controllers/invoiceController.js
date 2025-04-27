@@ -119,7 +119,7 @@ exports.getAllInvoices = async (req, res) => {
   try {
     // Get user's allowed branches from authMiddleware
     const { branch } = req.user || {};
-    const { includeBranchList } = req.query;
+    const { includeBranchList, includeAnalytics } = req.query;
 
     // Get filter parameters from request query
     const { 
@@ -147,6 +147,12 @@ exports.getAllInvoices = async (req, res) => {
       "Malumichampatti": "MP",
       "Hamumanthapuram": "HP",
     };
+
+    // Reverse branch code map for getting branch name from code
+    const branchNameMap = Object.entries(branchCodeMap).reduce((acc, [name, code]) => {
+      acc[code] = name;
+      return acc;
+    }, {});
 
     // Build the where condition
     const whereCondition = {};
@@ -258,6 +264,24 @@ exports.getAllInvoices = async (req, res) => {
       paymentModes[mode] = (paymentModes[mode] || 0) + 1;
     });
 
+    // Calculate branch totals and bank totals for charts
+    const branchTotals = {};
+    const bankTotals = {};
+
+    invoices.forEach(invoice => {
+      // Extract branch code from studentId (format includes "-XX-")
+      const branchCodeMatch = invoice.studentId.match(/-([A-Z]{2})-/);
+      const branchCode = branchCodeMatch && branchCodeMatch[1] ? branchCodeMatch[1] : 'Unknown';
+      const branchName = branchNameMap[branchCode] || 'Unknown';
+      
+      // Add to branch totals
+      branchTotals[branchName] = (branchTotals[branchName] || 0) + Number(invoice.paidAmount || 0);
+      
+      // Add to bank totals
+      const bankName = invoice.bank || 'N/A';
+      bankTotals[bankName] = (bankTotals[bankName] || 0) + Number(invoice.paidAmount || 0);
+    });
+
     // Prepare response
     const responseData = {
       message: 'Invoices retrieved successfully',
@@ -269,6 +293,12 @@ exports.getAllInvoices = async (req, res) => {
         paymentModes
       }
     };
+
+    // Add chart analytics data if requested
+    if (includeAnalytics === 'true') {
+      responseData.stats.branchTotals = branchTotals;
+      responseData.stats.bankTotals = bankTotals;
+    }
 
     // Add branch list if requested
     if (includeBranchList === 'true') {
