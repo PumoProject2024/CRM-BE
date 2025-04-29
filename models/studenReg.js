@@ -12,7 +12,7 @@ const StudentRegistration = sequelize.define('StudentRegistration', {
     allowNull: false,
     unique: true // Instead of making it primary, make it UNIQUE
   },
-  
+
   name: {
     type: DataTypes.STRING,
     allowNull: false,
@@ -38,9 +38,9 @@ const StudentRegistration = sequelize.define('StudentRegistration', {
       len: { args: [10, 15], msg: "Contact number should be between 10 to 15 digits" }
     }
   },
-  ParentNo:{
-    type:DataTypes.STRING,
-    allowNull:true,
+  ParentNo: {
+    type: DataTypes.STRING,
+    allowNull: true,
   },
   address: {
     type: DataTypes.TEXT,
@@ -129,7 +129,7 @@ const StudentRegistration = sequelize.define('StudentRegistration', {
     type: DataTypes.STRING,
     validate: {
       isIn: {
-        args: [['Cash', 'Card Payments','UPI', 'Loan']],
+        args: [['Cash', 'Card Payments', 'UPI', 'Loan']],
         msg: "Invalid payment mode"
       }
     }
@@ -214,7 +214,7 @@ const StudentRegistration = sequelize.define('StudentRegistration', {
   },
   pendingFeesDate4: {
     type: DataTypes.DATEONLY,
-    allowNull: true,  // ✅ Allows NULL if needed
+    allowNull: true,
     validate: {
       isDate: { msg: "Pending Fees Date must be a valid date" }
     }
@@ -248,6 +248,18 @@ const StudentRegistration = sequelize.define('StudentRegistration', {
   },
   modified_by: {
     type: DataTypes.STRING
+  },
+  sharingBranch: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  sharingAdminName: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  sharingAmount: {
+    type: DataTypes.STRING,
+    allowNull: true,
   },
 }, {
   tableName: 'student_registrations',

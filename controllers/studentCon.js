@@ -130,9 +130,9 @@ class StudentRegistrationController {
         search,
         searchField,
         dueToday,
-        todaysAdmission, // New parameter for today's admission filter
-        todayPendingFees,
-        fromDate, // New parameter for date range start
+        todaysAdmission,
+        pendingFeesList, // New parameter for pending fees filter
+        fromDate,
         toDate,
         ...filters
       } = req.query;
@@ -177,6 +177,16 @@ class StudentRegistrationController {
         ];
       }
   
+      // NEW: Filter for pending fees list - shows all students with any pending fees
+      if (pendingFeesList === "true") {
+        options.where[Op.or] = [
+          { pendingFees: { [Op.gt]: 0 } },
+          { pendingFees2: { [Op.gt]: 0 } },
+          { pendingFees3: { [Op.gt]: 0 } },
+          { pendingFees4: { [Op.gt]: 0 } }
+        ];
+      }
+  
       // Filter for today's admissions
       if (todaysAdmission === "true") {
         const todayDate = new Date().toISOString().split("T")[0];
@@ -185,7 +195,7 @@ class StudentRegistrationController {
           dateOfAdmission: { [Op.eq]: Sequelize.literal(`'${todayDate}'::date`) }
         };
       }
-
+  
       if (fromDate && toDate) {
         // Ensure dates are properly formatted
         const validFromDate = new Date(fromDate).toISOString().split("T")[0];
@@ -203,7 +213,6 @@ class StudentRegistrationController {
         };
       }
       
-  
       // Comprehensive field categorization
       const fieldTypes = {
         stringFields: [
