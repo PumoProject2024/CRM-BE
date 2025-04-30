@@ -127,19 +127,67 @@ exports.getEmployees = async (req, res) => {
 // Get All Employee Details (No filters)
 exports.getAllEmployeeDetails = async (req, res) => {
   try {
+    // Import operators and Sequelize from sequelize
+    const { Op, Sequelize } = require('sequelize');
+    
     const page = parseInt(req.query.page) || 1; // Default to page 1
     const limit = parseInt(req.query.limit) || 20; // Default 20 per page
     const offset = (page - 1) * limit;
+    
+    // Get search parameters
+    const nameSearch = req.query.name ? req.query.name.trim() : '';
+    const branchSearch = req.query.branch ? req.query.branch.trim() : '';
+
+    console.log('Search params:', { nameSearch, branchSearch });
 
     // Get all attributes dynamically
     const attributes = Object.keys(Employee.rawAttributes);
 
-    // Fetch paginated employees
+    // Build where condition for search filters
+    const whereCondition = {};
+    
+    // Add name search condition if provided
+    if (nameSearch) {
+      // For exact match (will only match exact name):
+      // whereCondition.emp_name = nameSearch;
+      
+      // For case-insensitive partial match:
+      whereCondition.emp_name = {
+        [Op.iLike]: `%${nameSearch}%` 
+      };
+    }
+    
+    // Add branch search condition if provided
+    if (branchSearch) {
+      // For JSON array column in PostgreSQL
+      // Using proper JSON containment syntax for PostgreSQL
+      whereCondition[Op.and] = Sequelize.literal(`"branch"::jsonb ? '${branchSearch}'`);
+      
+      // Alternative approaches if the above doesn't work:
+      // whereCondition[Op.and] = Sequelize.literal(`'${branchSearch}' = ANY("branch")`);
+      // whereCondition[Op.and] = Sequelize.literal(`"branch"::text LIKE '%${branchSearch}%'`);
+    }
+
+    // Set up order based on parameters
+    let orderBy;
+    if (branchSearch) {
+      // If branch filter is applied, sort by name only
+      // We're avoiding complex array sorting which might cause errors
+      orderBy = [['emp_name', 'ASC']];
+    } else {
+      // Default sort by name
+      orderBy = [['emp_name', 'ASC']];
+    }
+
+    console.log('Search conditions:', { nameSearch, branchSearch, whereCondition, orderBy });
+
+    // Fetch paginated employees with filters
     const { count, rows: employees } = await Employee.findAndCountAll({
       attributes,
+      where: whereCondition,
       limit,
       offset,
-      order: [["emp_name", "ASC"]]
+      order: orderBy
     });
 
     if (!employees || employees.length === 0) {

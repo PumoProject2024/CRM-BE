@@ -10,6 +10,10 @@ const Employee = sequelize.define("Employee", {
     type: DataTypes.STRING,
     allowNull: false,
   },
+  emp_code: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
   role: {
     type: DataTypes.ENUM("BDE", "Trainer", "Placement officer", "Branch-head", "CEO", "Super-Admin"),
     allowNull: false,
