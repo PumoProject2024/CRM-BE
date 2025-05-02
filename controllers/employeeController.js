@@ -9,25 +9,32 @@ exports.createEmployee = async (req, res) => {
   try {
     const { password, ...employeeData } = req.body;
 
+    // Get the highest emp_id in the table (cast to int for safety)
+    const highestEmployee = await Employee.findOne({
+      order: [['emp_id', 'DESC']],
+    });
+
+    // Start from 5000 if no employees exist
+    const nextEmpId = highestEmployee
+      ? parseInt(highestEmployee.emp_id) + 1
+      : 5000;
 
     // Hash the password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create new employee
+    // Create the new employee with auto-generated emp_id
     const newEmployee = await Employee.create({
       ...employeeData,
+      emp_id: nextEmpId,
       password: hashedPassword,
     });
-
-    // ✅ Log the new employee's emp_id
-    console.log("✅ New Employee ID:", newEmployee.emp_id);
 
     res.status(201).json({
       message: "Employee registered successfully",
       employee: newEmployee,
     });
   } catch (error) {
-    console.error("❌ Error in createEmployee:", error);
+    console.error("Error creating employee:", error);
     res.status(400).json({ error: error.message });
   }
 };
