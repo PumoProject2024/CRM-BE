@@ -62,11 +62,11 @@ class StudentRegistrationController {
         const branchAbbr = getBranchAbbreviation(branch);
         const courseAbbr = getCourseTypeAbbreviation(courseType || 'Course');
       
-        // Only filter by branchAbbr for number tracking
-        const idPattern = `%-${branchAbbr}-%`;
+        // Filter by branch abbreviation only to find highest number across all course types
+        const branchPattern = `%-${branchAbbr}-%`;
       
         const lastStudent = await StudentRegistration.findOne({
-          where: { studentId: { [Op.like]: idPattern } },
+          where: { studentId: { [Op.like]: branchPattern } },
           order: [['studentId', 'DESC']],
         });
       
@@ -81,7 +81,6 @@ class StudentRegistrationController {
       
         return `${courseAbbr}-${branchAbbr}-${nextNumber}`;
       };
-      
 
       // CASE 1: Only preview next ID (called when branch is selected)
       if (preview === 'true') {
