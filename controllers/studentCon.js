@@ -62,23 +62,31 @@ class StudentRegistrationController {
         const branchAbbr = getBranchAbbreviation(branch);
         const courseAbbr = getCourseTypeAbbreviation(courseType || 'Course');
       
-        // Filter by branch abbreviation only to find highest number across all course types
+        // Get ALL students from this branch to manually find highest number
         const branchPattern = `%-${branchAbbr}-%`;
-      
-        const lastStudent = await StudentRegistration.findOne({
+        
+        const allBranchStudents = await StudentRegistration.findAll({
           where: { studentId: { [Op.like]: branchPattern } },
-          order: [['studentId', 'DESC']],
+          attributes: ['studentId'],
+          raw: true
         });
-      
-        let nextNumber = 1001;
-        if (lastStudent?.studentId) {
-          const parts = lastStudent.studentId.split('-');
-          if (parts.length === 3) {
-            const lastNumber = parseInt(parts[2], 10);
-            if (!isNaN(lastNumber)) nextNumber = lastNumber + 1;
-          }
+        
+        // Find the highest number across all course types
+        let highestNumber = 1000; // Start at 1000, so first will be 1001
+        
+        if (allBranchStudents.length > 0) {
+          allBranchStudents.forEach(student => {
+            const parts = student.studentId.split('-');
+            if (parts.length === 3) {
+              const number = parseInt(parts[2], 10);
+              if (!isNaN(number) && number > highestNumber) {
+                highestNumber = number;
+              }
+            }
+          });
         }
-      
+        
+        const nextNumber = highestNumber + 1;
         return `${courseAbbr}-${branchAbbr}-${nextNumber}`;
       };
 
@@ -120,6 +128,7 @@ class StudentRegistrationController {
       res.status(500).json({ error: 'Internal Server Error' });
     }
   }
+
 
   static async getAllStudentRegistrations(req, res) {
     try {
