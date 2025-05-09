@@ -1,5 +1,6 @@
 const { CourseDetails } = require('../models/CourseDetails');
 const jwt = require('jsonwebtoken');
+const { Op } = require('sequelize');
 
 // Create a new course
 exports.createCourse = async (req, res) => {
@@ -42,15 +43,27 @@ exports.createCourse = async (req, res) => {
 // Get all courses
 exports.getAllCourses = async (req, res) => {
   try {
+    const { courseName } = req.query;
+
+    const whereClause = {};
+    if (courseName) {
+      whereClause.courseName = {
+        [Op.iLike]: `%${courseName}%`  // case-insensitive partial match
+      };
+    }
+
     const courses = await CourseDetails.findAll({
+      where: whereClause,
       attributes: { exclude: ['createdAt', 'updatedAt'] }
     });
+
     res.status(200).json(courses);
   } catch (error) {
     console.error('Error fetching courses:', error);
     res.status(500).json({ error: 'Internal Server Error' });
   }
 };
+
 
 // Get course by ID
 exports.getCourseById = async (req, res) => {

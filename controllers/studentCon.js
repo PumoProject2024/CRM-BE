@@ -16,7 +16,8 @@ const BRANCH_ABBREVIATIONS = {
 
 const COURSE_TYPE_ABBREVIATIONS = {
   "CADD": "CD",
-  "Pumo Tech": "PT",
+  "Pumo Tech IT": "PI",
+  "Pumo Tech Automation": "PA",
   "Monz Creative School": "MZ",
 
 };
@@ -128,7 +129,6 @@ class StudentRegistrationController {
       res.status(500).json({ error: 'Internal Server Error' });
     }
   }
-
 
   static async getAllStudentRegistrations(req, res) {
     try {
