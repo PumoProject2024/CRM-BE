@@ -1,5 +1,8 @@
 const { Op, Sequelize } = require('sequelize');
 const StudentRegistration = require('../models/studenReg');
+const sequelize = require('../config/database');
+
+// Now you can use sequelize in your updateStudentRegistration function
 
 // Add this utility function (can be in a separate utils file or at the top of your controller)
 const BRANCH_ABBREVIATIONS = {
@@ -152,8 +155,10 @@ class StudentRegistrationController {
         where: {},
         limit: limitNum,
         offset: (pageNum - 1) * limitNum,
-        order: [["name", "ASC"]],
-      };
+        order: [
+          [Sequelize.literal(`CAST(SUBSTRING("studentId" FROM '[0-9]+$') AS INTEGER)`), 'DESC']
+        ]
+              };
   
       // Extract allowed branches from user
       const { role, emp_name, branch: allowedBranches } = req.user;
@@ -425,7 +430,55 @@ class StudentRegistrationController {
         details: error.message,
       });
     }
-  } // Ensure your route uses studentId
+  }
+
+  static async updateStudentRegistrationById(req, res) {
+    try {
+      // ✅ Extract id from request params
+      const { id } = req.params;
+      const updateData = req.body;
+  
+      // ✅ Ensure the user is authenticated and retrieve their emp_id
+      const { emp_id } = req.user || {};
+  
+      if (!emp_id) {
+        return res.status(401).json({
+          error: 'Unauthorized: Missing user information.',
+        });
+      }
+  
+      console.log("Logged-in User (emp_id):", emp_id);
+  
+      // ✅ Find the student registration by primary key id
+      const student = await StudentRegistration.findByPk(id);
+  
+      if (!student) {
+        return res.status(404).json({
+          error: 'Student Registration Not Found',
+        });
+      }
+  
+      // ✅ Add the modified_by field (logged-in user's emp_id)
+      updateData.modified_by = emp_id;
+  
+      // ✅ Update the student registration
+      await student.update(updateData);
+  
+      res.status(200).json({
+        message: 'Student Registration Updated Successfully by ID',
+        student,
+      });
+    } catch (error) {
+      console.error('Error updating student registration by ID:', error);
+      res.status(500).json({
+        error: 'Internal Server Error',
+        details: error.message,
+      });
+    }
+  }
+  
+  
+  // Ensure your route uses studentId
 }
 
 module.exports = StudentRegistrationController;

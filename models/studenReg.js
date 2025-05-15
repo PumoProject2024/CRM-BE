@@ -261,6 +261,10 @@ const StudentRegistration = sequelize.define('StudentRegistration', {
     type: DataTypes.STRING,
     allowNull: true,
   },
+  studentProgressStatus: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
 }, {
   tableName: 'student_registrations',
   timestamps: true

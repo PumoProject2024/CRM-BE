@@ -49,6 +49,8 @@ router.get('/all-invoices',authMiddleware,getAllInvoices);
 router.get('/allregistrations',authMiddleware, StudentRegistrationController.getAllStudentRegistrations);
 
 router.put('/registrations/:studentId', authMiddleware,StudentRegistrationController.updateStudentRegistration);
+router.put('/update/:id',authMiddleware,StudentRegistrationController.updateStudentRegistrationById);
+
 
 router.post("/register", employeeController.createEmployee); // Allow first registration without auth
 router.post("/login", employeeController.loginEmployee); // No middleware here
