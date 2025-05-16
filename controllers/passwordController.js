@@ -124,40 +124,40 @@ exports.verifyResetToken = async (req, res) => {
 exports.resetPassword = async (req, res) => {
   try {
     const { emp_id, token, newPassword } = req.body;
-    
+
     // Find the employee
-    const employee = await Employee.findOne({ 
-      where: { 
+    const employee = await Employee.findOne({
+      where: {
         emp_id,
         reset_token: { [Op.ne]: null },
         reset_token_expires: { [Op.gt]: new Date() }
-      } 
+      }
     });
-    
+
     if (!employee) {
       return res.status(400).json({ message: "Invalid or expired reset token" });
     }
-    
+
     // Verify the token matches
     const isValidToken = await bcrypt.compare(token, employee.reset_token);
-    
+
     if (!isValidToken) {
       return res.status(400).json({ message: "Invalid reset token" });
     }
-    
+
     // Hash the new password
     const hashedPassword = await bcrypt.hash(newPassword, 10);
-    
+
     // Update the employee record
     await Employee.update(
-      { 
+      {
         password: hashedPassword,
         reset_token: null,
         reset_token_expires: null
       },
       { where: { emp_id: employee.emp_id } }
     );
-    
+
     // Send confirmation email
     const mailOptions = {
       from: process.env.EMAIL_FROM || "noreply@yourcompany.com",
@@ -171,11 +171,11 @@ exports.resetPassword = async (req, res) => {
         <p>Your Company Team</p>
       `
     };
-    
+
     await transporter.sendMail(mailOptions);
-    
+
     res.status(200).json({ message: "Password has been reset successfully" });
-    
+
   } catch (error) {
     console.error("Password reset error:", error);
     res.status(500).json({ error: error.message });
