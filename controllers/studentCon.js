@@ -13,7 +13,10 @@ const BRANCH_ABBREVIATIONS = {
   "Marathahalli": "MH",
   "Gandhipuram": "GP",
   "Malumichampatti": "MP",
-  "Hamumanthapuram": "HP",
+  "Hosur": "HS",
+  "Saravanampatti":"SP",
+  "Tiruppur":"TP",
+  "Padi":"PD",
   // Add more as needed
 };
 
