@@ -4,7 +4,7 @@ const { Op } = require('sequelize');
 
 exports.createInvoice = async (req, res) => {
   try {
-    const { studentId, receipt_no, registrationPaymentMode, registrationReferenceNo, amount, cgst, sgst, paidAmount, paymentDate,bank } = req.body;
+    const { studentId, receipt_no, registrationPaymentMode, registrationReferenceNo, amount, cgst, sgst, paidAmount, paymentDate, bank } = req.body;
 
     // Ensure the logged-in user's data is available from authMiddleware
     const { emp_id, emp_name } = req.user || {};
@@ -122,14 +122,14 @@ exports.getAllInvoices = async (req, res) => {
     const { includeBranchList, includeAnalytics } = req.query;
 
     // Get filter parameters from request query
-    const { 
-      searchTerm, 
-      branchFilter, 
-      dateFilterType, 
-      startDate, 
-      endDate, 
-      sortKey = 'paymentDate', 
-      sortDirection = 'desc' 
+    const {
+      searchTerm,
+      branchFilter,
+      dateFilterType,
+      startDate,
+      endDate,
+      sortKey = 'paymentDate',
+      sortDirection = 'desc'
     } = req.query;
 
     if (!branch || !Array.isArray(branch) || branch.length === 0) {
@@ -145,7 +145,10 @@ exports.getAllInvoices = async (req, res) => {
       "Marathahalli": "MH",
       "Gandhipuram": "GP",
       "Malumichampatti": "MP",
-      "Hamumanthapuram": "HP",
+      "Hosur": "HS",
+      "Saravanampatti": "SP",
+      "Tiruppur": "TP",
+      "Padi": "PD",
     };
 
     // Reverse branch code map for getting branch name from code
@@ -273,10 +276,10 @@ exports.getAllInvoices = async (req, res) => {
       const branchCodeMatch = invoice.studentId.match(/-([A-Z]{2})-/);
       const branchCode = branchCodeMatch && branchCodeMatch[1] ? branchCodeMatch[1] : 'Unknown';
       const branchName = branchNameMap[branchCode] || 'Unknown';
-      
+
       // Add to branch totals
       branchTotals[branchName] = (branchTotals[branchName] || 0) + Number(invoice.paidAmount || 0);
-      
+
       // Add to bank totals
       const bankName = invoice.bank || 'N/A';
       bankTotals[bankName] = (bankTotals[bankName] || 0) + Number(invoice.paidAmount || 0);
