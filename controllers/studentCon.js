@@ -479,6 +479,178 @@ class StudentRegistrationController {
       });
     }
   }  
+
+  static async getPendingDetails(req, res) {
+    try {
+      const {
+        search,
+        searchField,
+        fromDate,
+        toDate,
+        branchFilter, // Add branch filter parameter
+        ...filters
+      } = req.query;
+  
+      const options = {
+        attributes: [
+          'studentId',
+          'name',
+          'contactNo',
+          'courseType',
+          'course',
+          'courseFees',
+          'discountAmount',
+          'adminEmpName',
+          'adminlocation',
+          'dateOfAdmission',
+          'feesCollected',
+          'pendingFees',
+          'pendingFees2',
+          'pendingFees3',
+          'pendingFees4',
+          'pendingFeesDate',
+          'pendingFeesDate2',
+          'pendingFeesDate3',
+          'pendingFeesDate4'
+        ],
+        where: {
+          pendingFees: { [Op.gt]: 0 }
+        },
+        order: [
+          [Sequelize.literal(`CAST(SUBSTRING("studentId" FROM '[0-9]+$') AS INTEGER)`), 'DESC']
+        ]
+      };
+  
+      // Extract allowed branches from user
+      const { role, emp_name, branch: allowedBranches } = req.user;
+  
+      if (!role || !emp_name) {
+        return res.status(403).json({ message: "Access denied: User role or emp_name is missing" });
+      }
+      if (!allowedBranches || allowedBranches.length === 0) {
+        return res.status(403).json({ message: "Access denied: No branch assigned" });
+      }
+  
+      // Branch code mapping (same as invoice controller)
+      const branchCodeMap = {
+        "Tambaram": "TM",
+        "Velachery": "VL",
+        "Vadapalani": "VP",
+        "Poonamallee": "PM",
+        "Marathahalli": "MH",
+        "Gandhipuram": "GP",
+        "Malumichampatti": "MP",
+        "Hosur": "HS",
+        "Saravanampatti": "SP",
+        "Tiruppur": "TP",
+        "Padi": "PD",
+      };
+  
+      // Handle branch filtering based on studentId pattern (similar to invoice controller)
+      let branchCodes = [];
+      if (branchFilter && branchFilter !== 'all') {
+        const branchCode = branchCodeMap[branchFilter];
+        if (branchCode) {
+          branchCodes = [branchCode];
+        }
+      } else {
+        branchCodes = allowedBranches
+          .map(name => branchCodeMap[name])
+          .filter(Boolean);
+      }
+  
+      // Apply branch filtering using studentId pattern
+      if (branchCodes.length > 0) {
+        options.where.studentId = {
+          [Op.or]: branchCodes.map(code => ({
+            [Op.like]: `%-${code}-%`,
+          })),
+        };
+      }
+  
+      // Apply role-based filtering
+      if (role === "Trainer") {
+        options.where.staffAssigned = emp_name;
+      } else if (role === "BDE" && req.user.has_access === false) {
+        options.where.adminEmpName = emp_name;
+      } else {
+        // Keep the existing adminbranch filter for backward compatibility
+        // but it will work together with the studentId branch filter above
+        options.where.adminbranch = { [Op.in]: allowedBranches };
+      }
+  
+      // Date range filter
+      if (fromDate && toDate) {
+        const validFromDate = new Date(fromDate).toISOString().split("T")[0];
+        const validToDate = new Date(toDate).toISOString().split("T")[0];
+        options.where.dateOfAdmission = { 
+          [Op.between]: [
+            Sequelize.literal(`'${validFromDate}'::date`),
+            Sequelize.literal(`'${validToDate}'::date`)
+          ] 
+        };
+      }
+  
+      // Search functionality
+      if (search && searchField) {
+        const stringFields = ['studentId', 'name', 'contactNo', 'courseType', 'course', 'adminEmpName', 'adminlocation'];
+        const numericFields = ['courseFees', 'discountAmount', 'feesCollected', 'pendingFees'];
+        const dateFields = ['dateOfAdmission', 'pendingFeesDate'];
+  
+        if (stringFields.includes(searchField)) {
+          // Handle search term with existing studentId filter
+          if (searchField === 'studentId' && options.where.studentId) {
+            const existingStudentIdFilter = options.where.studentId;
+            options.where[Op.and] = [
+              { studentId: existingStudentIdFilter },
+              { studentId: { [Op.iLike]: `%${search}%` } }
+            ];
+            delete options.where.studentId;
+          } else {
+            options.where[searchField] = { [Op.iLike]: `%${search}%` };
+          }
+        } else if (numericFields.includes(searchField)) {
+          const numValue = parseFloat(search);
+          if (!isNaN(numValue)) {
+            options.where[searchField] = numValue;
+          }
+        } else if (dateFields.includes(searchField)) {
+          const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+          if (dateRegex.test(search)) {
+            options.where[searchField] = { [Op.eq]: Sequelize.literal(`'${search}'::date`) };
+          }
+        }
+      }
+  
+      // Additional filters
+      if (filters.location && filters.location !== 'All') {
+        options.where.adminlocation = filters.location;
+      }
+      if (filters.branch && filters.branch !== 'All') {
+        options.where.adminbranch = filters.branch;
+      }
+      if (filters.courseType && filters.courseType !== 'All') {
+        options.where.courseType = filters.courseType;
+      }
+  
+      console.log("Pending Details WHERE clause:", JSON.stringify(options.where, null, 2));
+  
+      // Fetch all matching data without pagination
+      const pendingDetails = await StudentRegistration.findAll(options);
+  
+      res.status(200).json({
+        totalRecords: pendingDetails.length,
+        pendingDetails
+      });
+  
+    } catch (error) {
+      console.error("Error fetching pending details:", error);
+      res.status(500).json({ 
+        error: "Internal Server Error", 
+        details: error.message 
+      });
+    }
+  }
   // Ensure your route uses studentId
 }
 

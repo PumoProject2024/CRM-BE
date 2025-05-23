@@ -145,7 +145,11 @@ exports.getAllEmployeeDetails = async (req, res) => {
     const nameSearch = req.query.name ? req.query.name.trim() : '';
     const branchSearch = req.query.branch ? req.query.branch.trim() : '';
 
+    // Get user details from auth middleware
+    const { role, branch: userBranches } = req.user;
+
     console.log('Search params:', { nameSearch, branchSearch });
+    console.log('User details:', { role, userBranches });
 
     // Get all attributes dynamically
     const attributes = Object.keys(Employee.rawAttributes);
@@ -153,40 +157,85 @@ exports.getAllEmployeeDetails = async (req, res) => {
     // Build where condition for search filters
     const whereCondition = {};
     
+    // ✅ Role-based branch filtering
+    if (role === 'Branch-head') {
+      // Branch-head can only see employees from their assigned branches
+      const branchConditions = userBranches.map(branch => 
+        Sequelize.literal(`"branch"::jsonb ? '${branch}'`)
+      );
+      
+      if (branchConditions.length === 1) {
+        whereCondition[Op.and] = branchConditions[0];
+      } else if (branchConditions.length > 1) {
+        whereCondition[Op.or] = branchConditions;
+      }
+      
+      console.log('Branch-head restriction applied for branches:', userBranches);
+    }
+    // For other roles (like Admin), no branch restriction is applied
+    
     // Add name search condition if provided
     if (nameSearch) {
-      // For exact match (will only match exact name):
-      // whereCondition.emp_name = nameSearch;
-      
-      // For case-insensitive partial match:
       whereCondition.emp_name = {
         [Op.iLike]: `%${nameSearch}%` 
       };
     }
     
-    // Add branch search condition if provided
+    // Add branch search condition if provided (and user has access to it)
     if (branchSearch) {
-      // For JSON array column in PostgreSQL
-      // Using proper JSON containment syntax for PostgreSQL
-      whereCondition[Op.and] = Sequelize.literal(`"branch"::jsonb ? '${branchSearch}'`);
-      
-      // Alternative approaches if the above doesn't work:
-      // whereCondition[Op.and] = Sequelize.literal(`'${branchSearch}' = ANY("branch")`);
-      // whereCondition[Op.and] = Sequelize.literal(`"branch"::text LIKE '%${branchSearch}%'`);
+      if (role === 'Branch-head') {
+        // Branch-head can only search within their assigned branches
+        if (userBranches.includes(branchSearch)) {
+          // Combine with existing branch restriction
+          const existingBranchCondition = whereCondition[Op.and] || whereCondition[Op.or];
+          const branchSearchCondition = Sequelize.literal(`"branch"::jsonb ? '${branchSearch}'`);
+          
+          if (existingBranchCondition) {
+            // If there's already a branch condition, we need to ensure both are met
+            whereCondition[Op.and] = [
+              existingBranchCondition,
+              branchSearchCondition
+            ];
+          } else {
+            whereCondition[Op.and] = branchSearchCondition;
+          }
+        } else {
+          // Branch-head trying to search a branch they don't have access to
+          return res.status(403).json({ 
+            message: `Access denied. You don't have permission to view employees from branch: ${branchSearch}` 
+          });
+        }
+      } else {
+        // For other roles, allow searching any branch
+        const branchSearchCondition = Sequelize.literal(`"branch"::jsonb ? '${branchSearch}'`);
+        if (whereCondition[Op.and]) {
+          // If there's already an AND condition, combine them
+          whereCondition[Op.and] = Array.isArray(whereCondition[Op.and]) 
+            ? [...whereCondition[Op.and], branchSearchCondition]
+            : [whereCondition[Op.and], branchSearchCondition];
+        } else {
+          whereCondition[Op.and] = branchSearchCondition;
+        }
+      }
     }
 
     // Set up order based on parameters
     let orderBy;
     if (branchSearch) {
       // If branch filter is applied, sort by name only
-      // We're avoiding complex array sorting which might cause errors
       orderBy = [['emp_name', 'ASC']];
     } else {
       // Default sort by name
       orderBy = [['emp_name', 'ASC']];
     }
 
-    console.log('Search conditions:', { nameSearch, branchSearch, whereCondition, orderBy });
+    console.log('Final search conditions:', { 
+      nameSearch, 
+      branchSearch, 
+      whereCondition, 
+      orderBy,
+      userRole: role
+    });
 
     // Fetch paginated employees with filters
     const { count, rows: employees } = await Employee.findAndCountAll({
@@ -209,6 +258,11 @@ exports.getAllEmployeeDetails = async (req, res) => {
       totalPages: Math.ceil(count / limit),
       perPage: limit,
       data: cleanEmployees,
+      // ✅ Include user context in response for debugging
+      userContext: {
+        role,
+        accessibleBranches: role === 'Branch-head' ? userBranches : 'All branches'
+      }
     });
   } catch (error) {
     console.error("❌ Error in getAllEmployeeDetails:", error);

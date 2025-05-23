@@ -21,7 +21,7 @@ router.put('/students/:id', authMiddleware, studentController.updateStudent);
 router.get("/students/:contactNo", studentController.getStudentByContactNo);
 router.get('/bde-employees',employeeController.getBDEEmployees);
 
-
+router.get('/pending-details', authMiddleware, StudentRegistrationController.getPendingDetails);
 
 router.post('/password/forgot', passwordController.requestPasswordReset);
 router.get('/password/reset/:emp_id/:token', passwordController.verifyResetToken);
@@ -53,7 +53,7 @@ router.put('/update/:id',authMiddleware,StudentRegistrationController.updateStud
 router.post("/register", employeeController.createEmployee); // Allow first registration without auth
 router.post("/login", employeeController.loginEmployee); // No middleware here
 router.get("/regdetail", authMiddleware, employeeController.getEmployees);
-router.get("/all-employees", getAllEmployeeDetails);
+router.get("/all-employees", authMiddleware,getAllEmployeeDetails);
 router.put('/regdetail/update', authMiddleware, employeeController.updateEmployeeProfile);
 router.post('/changepassword', authMiddleware, employeeController.changePassword);
 router.put("/employees/:emp_id", employeeController.updateEmployeeById);
