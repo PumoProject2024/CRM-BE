@@ -10,9 +10,6 @@ const studentController = require("../controllers/studentController");
 const { getAllEmployeeDetails } = require("../controllers/employeeController");
 const { getAllInvoices } = require('../controllers/invoiceController');
 
-
-
-
 const router = express.Router();
 
 // POST route to create a new student registration
@@ -52,6 +49,7 @@ router.put('/registrations/:studentId', authMiddleware,StudentRegistrationContro
 router.put('/update/:id',authMiddleware,StudentRegistrationController.updateStudentRegistrationById);
 
 
+
 router.post("/register", employeeController.createEmployee); // Allow first registration without auth
 router.post("/login", employeeController.loginEmployee); // No middleware here
 router.get("/regdetail", authMiddleware, employeeController.getEmployees);
@@ -60,9 +58,6 @@ router.put('/regdetail/update', authMiddleware, employeeController.updateEmploye
 router.post('/changepassword', authMiddleware, employeeController.changePassword);
 router.put("/employees/:emp_id", employeeController.updateEmployeeById);
 router.delete("/employees/:emp_id", employeeController.deleteEmployeeById);
-
-
-
 
 
 module.exports = router;

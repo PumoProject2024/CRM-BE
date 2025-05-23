@@ -478,9 +478,7 @@ class StudentRegistrationController {
         details: error.message,
       });
     }
-  }
-  
-  
+  }  
   // Ensure your route uses studentId
 }
 

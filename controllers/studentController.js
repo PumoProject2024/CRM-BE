@@ -167,7 +167,6 @@ exports.getStudentByContactNo = async (req, res) => {
   }
 };
 
-
 // Update a student
 exports.updateStudent = async (req, res) => {
   try {
