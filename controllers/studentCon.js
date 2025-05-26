@@ -488,6 +488,7 @@ class StudentRegistrationController {
         fromDate,
         toDate,
         branchFilter, // Add branch filter parameter
+        dueToday, // Add due today filter parameter
         ...filters
       } = req.query;
   
@@ -577,6 +578,30 @@ class StudentRegistrationController {
         // Keep the existing adminbranch filter for backward compatibility
         // but it will work together with the studentId branch filter above
         options.where.adminbranch = { [Op.in]: allowedBranches };
+      }
+  
+      // Filter for payments due today
+      if (dueToday === "true") {
+        const todayDate = new Date().toISOString().split("T")[0]; // Get YYYY-MM-DD format
+        
+        // Create an array to hold due today conditions
+        const dueTodayConditions = [
+          { pendingFeesDate: { [Op.eq]: Sequelize.literal(`'${todayDate}'::date`) } },
+          { pendingFeesDate2: { [Op.eq]: Sequelize.literal(`'${todayDate}'::date`) } },
+          { pendingFeesDate3: { [Op.eq]: Sequelize.literal(`'${todayDate}'::date`) } },
+          { pendingFeesDate4: { [Op.eq]: Sequelize.literal(`'${todayDate}'::date`) } },
+        ];
+        
+        // If there are already OR conditions in the where clause, combine them
+        if (options.where[Op.or]) {
+          options.where[Op.and] = [
+            { [Op.or]: options.where[Op.or] },
+            { [Op.or]: dueTodayConditions }
+          ];
+          delete options.where[Op.or];
+        } else {
+          options.where[Op.or] = dueTodayConditions;
+        }
       }
   
       // Date range filter
