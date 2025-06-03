@@ -10,7 +10,7 @@ const StudentRegistration = sequelize.define('StudentRegistration', {
   studentId: {
     type: DataTypes.STRING,
     allowNull: false,
-    unique: true // Instead of making it primary, make it UNIQUE
+    unique: true 
   },
 
   name: {

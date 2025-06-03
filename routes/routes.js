@@ -9,6 +9,9 @@ const passwordController = require("../controllers/passwordController");
 const studentController = require("../controllers/studentController");
 const { getAllEmployeeDetails } = require("../controllers/employeeController");
 const { getAllInvoices } = require('../controllers/invoiceController');
+const studentCourseController = require('../controllers/studentCourseController');
+
+
 
 const router = express.Router();
 
@@ -26,15 +29,14 @@ router.get('/pending-details', authMiddleware, StudentRegistrationController.get
 router.post('/password/forgot', passwordController.requestPasswordReset);
 router.get('/password/reset/:emp_id/:token', passwordController.verifyResetToken);
 router.post('/password/reset', passwordController.resetPassword);
+router.post("/reset-default-password", authMiddleware, passwordController.resetToDefaultPassword);
+
 
 router.post('/create-course', authMiddleware,createCourse);
 router.get('/course', getAllCourses);
 router.put('/courses/:id',updateCourse);
 router.delete('/courses/:id',deleteCourse);
 router.get('/courses/:courseName/:courseType', getCourseByNameAndType);
-
-
-
 
 router.post('/registrations',authMiddleware ,StudentRegistrationController.createStudentRegistration);
 router.post('/invoices', authMiddleware,createInvoice);
@@ -48,8 +50,6 @@ router.get('/allregistrations',authMiddleware, StudentRegistrationController.get
 router.put('/registrations/:studentId', authMiddleware,StudentRegistrationController.updateStudentRegistration);
 router.put('/update/:id',authMiddleware,StudentRegistrationController.updateStudentRegistrationById);
 
-
-
 router.post("/register", employeeController.createEmployee); // Allow first registration without auth
 router.post("/login", employeeController.loginEmployee); // No middleware here
 router.get("/regdetail", authMiddleware, employeeController.getEmployees);
@@ -58,6 +58,13 @@ router.put('/regdetail/update', authMiddleware, employeeController.updateEmploye
 router.post('/changepassword', authMiddleware, employeeController.changePassword);
 router.put("/employees/:emp_id", employeeController.updateEmployeeById);
 router.delete("/employees/:emp_id", employeeController.deleteEmployeeById);
+
+router.post('/student-record', studentCourseController.create);
+router.get('/students-record', studentCourseController.getAll);
+router.put('/students-record/:id', studentCourseController.update);
+router.get("/trainers",employeeController.getTrainerEmployees);
+
+
 
 
 module.exports = router;

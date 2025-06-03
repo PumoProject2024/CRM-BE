@@ -18,102 +18,113 @@ const transporter = nodemailer.createTransport({
 exports.requestPasswordReset = async (req, res) => {
   try {
     const { email_id } = req.body;
-    
+
     // Check if employee exists
     const employee = await Employee.findOne({ where: { email_id } });
-    
+
     if (!employee) {
       return res.status(404).json({ message: "No account found with that email" });
     }
-    
+
     // Generate reset token
     const resetToken = crypto.randomBytes(32).toString('hex');
-    
+
     // Hash the reset token for storage
     const hashedToken = await bcrypt.hash(resetToken, 10);
-    
+
     // Set token and expiry in database
     await Employee.update(
-      { 
-        reset_token: hashedToken, 
-        reset_token_expires: new Date(Date.now() + 5 * 60 * 1000) // Token valid for 5 minutes
-      }, 
+      {
+        reset_token: hashedToken,
+        reset_token_expires: new Date(Date.now() + 5 * 60 * 1000) // 5 minutes
+      },
       { where: { emp_id: employee.emp_id } }
     );
-    
-    // Create reset URL (replace with your frontend URL)
+
+    // Create reset URL
     const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${employee.emp_id}/${resetToken}`;
-    
+
+    // ✅ DEVELOPMENT LOGGING
+    console.log("🔐 Password Reset Token Generated:");
+    console.log("EMP_ID:", employee.emp_id);
+    console.log("Raw Token (for Postman):", resetToken);
+    console.log("Reset URL:", resetUrl);
+
     // Send email with reset link
     const mailOptions = {
-        from: `"Pumo Tech Support" <${process.env.EMAIL_USER}>`, // Friendly sender name
-        to: email_id,
-        subject: "Password Reset Request",
-        html: `
-          <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-            <h2>Password Reset Request</h2>
-            <p>Hello,</p>
-            <p>You requested a password reset for your account.</p>
-            <p>
-              Click the link below to reset your password. This link is valid for 1 hour:
-            </p>
-            <a href="${resetUrl}" target="_blank" style="
-              display: inline-block;
-              padding: 10px 20px;
-              margin: 20px 0;
-              background-color: #4CAF50;
-              color: white;
-              text-decoration: none;
-              border-radius: 5px;">
-              Reset Password
-            </a>
-            <p>If you didn’t request this, you can safely ignore this email.</p>
-            <p>Thank you,<br>Pumo Tech Team</p>
-          </div>
-        `,
-      };
-      
+      from: `"Pumo Tech Support" <${process.env.EMAIL_USER}>`,
+      to: email_id,
+      subject: "Password Reset Request",
+      html: `
+        <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+          <h2>Password Reset Request</h2>
+          <p>Hello,</p>
+          <p>You requested a password reset for your account.</p>
+          <p>
+            Click the link below to reset your password. This link is valid for 1 hour:
+          </p>
+          <a href="${resetUrl}" target="_blank" style="
+            display: inline-block;
+            padding: 10px 20px;
+            margin: 20px 0;
+            background-color: #4CAF50;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;">
+            Reset Password
+          </a>
+          <p>If you didn’t request this, you can safely ignore this email.</p>
+          <p>Thank you,<br>Pumo Tech Team</p>
+        </div>
+      `,
+    };
+
     await transporter.sendMail(mailOptions);
-    
-    res.status(200).json({ 
+
+    res.status(200).json({
       message: "Password reset link sent to your email",
-      success: true
+      success: true,
+      emp_id: employee.emp_id,
+      resetToken, // raw token
+      resetUrl    // complete frontend reset URL
     });
-    
+
+
   } catch (error) {
     console.error("Password reset request error:", error);
     res.status(500).json({ error: error.message });
   }
 };
 
+
 // Verify reset token
 exports.verifyResetToken = async (req, res) => {
   try {
     const { emp_id, token } = req.params;
-    
+
     // Find the employee
-    const employee = await Employee.findOne({ 
-      where: { 
+    const employee = await Employee.findOne({
+      where: {
         emp_id,
         reset_token: { [Op.ne]: null },
         reset_token_expires: { [Op.gt]: new Date() }
-      } 
+      }
     });
-    
+
     if (!employee) {
       return res.status(400).json({ message: "Invalid or expired reset token" });
     }
-    
+
     // Verify the token matches
     const isValidToken = await bcrypt.compare(token, employee.reset_token);
-    
+
     if (!isValidToken) {
       return res.status(400).json({ message: "Invalid reset token" });
     }
-    
+
     // Token is valid
     res.status(200).json({ message: "Token verified, proceed to reset password" });
-    
+
   } catch (error) {
     console.error("Token verification error:", error);
     res.status(500).json({ error: error.message });
@@ -181,3 +192,45 @@ exports.resetPassword = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+
+// Admin-only: Reset to default password
+exports.resetToDefaultPassword = async (req, res) => {
+  try {
+    const { email_id } = req.body;
+
+    // Ensure only Super-Admin can call this
+    if (req.user.role !== "Super-Admin") {
+      return res.status(403).json({ message: "Forbidden: Super-Admins only" });
+    }
+
+    const employee = await Employee.findOne({ where: { email_id } });
+
+    if (!employee) {
+      return res.status(404).json({ message: "Employee not found" });
+    }
+
+    const defaultPassword = "Pumo@123"; // Default password
+    const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+
+    await Employee.update(
+      {
+        password: hashedPassword,
+        reset_token: null,
+        reset_token_expires: null,
+        force_password_change: true // Optional flag
+      },
+      { where: { email_id } }
+    );
+
+    res.status(200).json({
+      message: "Password reset to default successfully",
+      email_id,
+      defaultPassword // Optional: return for testing/debug
+    });
+
+  } catch (error) {
+    console.error("Default password reset error:", error);
+    res.status(500).json({ error: error.message });
+  }
+};
+

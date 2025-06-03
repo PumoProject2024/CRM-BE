@@ -359,6 +359,38 @@ exports.getBDEEmployees = async (req, res) => {
   }
 };
 
+exports.getTrainerEmployees = async (req, res) => {
+  try {
+    const { branch } = req.query;
+
+    if (!branch) {
+      return res.status(400).json({ message: "Branch query parameter is required." });
+    }
+
+    const cleanBranch = branch.replace(/"/g, "");
+
+    const employees = await Employee.findAll({
+      where: {
+        [Op.and]: [
+          Sequelize.where(Sequelize.cast(Sequelize.col("role"), "TEXT"), {
+            [Op.iLike]: "trainer"
+          }),
+          Sequelize.where(Sequelize.cast(Sequelize.col("branch"), "TEXT"), {
+            [Op.iLike]: `%${cleanBranch}%`
+          })
+        ]
+      },
+      attributes: ["emp_id", "emp_name", "branch"]
+    });
+
+    res.status(200).json(employees.map(emp => emp.dataValues));
+  } catch (error) {
+    console.error("Error fetching Trainer employees:", error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+
 
 // In your routes file
 
