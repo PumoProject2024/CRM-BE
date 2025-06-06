@@ -69,8 +69,8 @@ const StudentRegistration = sequelize.define('StudentRegistration', {
     allowNull: false,
     validate: {
       isIn: {
-        args: [['student', 'fresher','Internship', 'workingexperience', 'workingexperience1-2', 'workingexperience2-3', 'workingexperience3-4', 'workingexperience4-5',
-          'workingexperience5-6', 'workingexperience6-7', 'workingexperience7-8', 'workingexperience8-9', 'workingexperience9-10', 'workingexperience>10'
+        args: [['Student', 'Fresher','Internship', 'Working Experience', 'Working Experience 1-2', 'Working Experience 2-3', 'Working Experience 3-4', 'Working Experience 4-5',
+          'Working Experience 5-6', 'Working Experience 6-7', 'Working Experience 7-8', 'Working Experience 8-9', 'Working Experience 9-10', 'Working Experience >10'
         ]],
         msg: "Invalid student status"
       }
