@@ -6,7 +6,7 @@ const studentCourseController = {
   create: async (req, res) => {
     try {
       const studentCourse = await StudentCourse.create(req.body);
-      
+
       res.status(201).json({
         success: true,
         message: 'Student course record created successfully',
@@ -19,14 +19,14 @@ const studentCourseController = {
           field: err.path,
           message: err.message
         }));
-        
+
         return res.status(400).json({
           success: false,
           message: 'Validation error',
           errors: validationErrors
         });
       }
-      
+
       // Handle other errors
       res.status(500).json({
         success: false,
@@ -47,7 +47,8 @@ const studentCourseController = {
         batch,
         learningMode,
         progressStatus,
-        search
+        searchField,
+        searchValue,
       } = req.query;
 
       const offset = (page - 1) * limit;
@@ -60,14 +61,11 @@ const studentCourseController = {
       if (learningMode) whereClause.learningMode = learningMode;
       if (progressStatus) whereClause.ProgressStatus = progressStatus;
 
-      // Add search functionality
-      if (search) {
-        whereClause[Op.or] = [
-          { studentName: { [Op.iLike]: `%${search}%` } },
-          { studentId: { [Op.iLike]: `%${search}%` } },
-          { staffName1: { [Op.iLike]: `%${search}%` } },
-          { courseName: { [Op.iLike]: `%${search}%` } }
-        ];
+      // Add search by selected field only
+      if (searchField && searchValue) {
+        whereClause[searchField] = {
+          [Op.iLike]: `%${searchValue}%`
+        };
       }
 
       const { count, rows } = await StudentCourse.findAndCountAll({
@@ -95,7 +93,8 @@ const studentCourseController = {
       });
     }
   },
-    // UPDATE - Update student course record
+
+  // UPDATE - Update student course record
   update: async (req, res) => {
     try {
       const { id } = req.params;
@@ -133,7 +132,7 @@ const studentCourseController = {
           field: err.path,
           message: err.message
         }));
-        
+
         return res.status(400).json({
           success: false,
           message: 'Validation error',
@@ -148,5 +147,5 @@ const studentCourseController = {
       });
     }
   }
-  };
+};
 module.exports = studentCourseController;
