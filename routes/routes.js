@@ -60,7 +60,7 @@ router.put("/employees/:emp_id", employeeController.updateEmployeeById);
 router.delete("/employees/:emp_id", employeeController.deleteEmployeeById);
 
 router.post('/student-record', studentCourseController.create);
-router.get('/students-record', studentCourseController.getAll);
+router.get('/students-record',authMiddleware, studentCourseController.getAll);
 router.put('/students-record/:id', studentCourseController.update);
 router.get("/trainers",employeeController.getTrainerEmployees);
 

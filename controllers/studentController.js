@@ -113,12 +113,11 @@ exports.getAllStudents = async (req, res) => {
       }
     }
 
-    const students = await Student.findAndCountAll({
-      where,
-      limit: parseInt(limit),
-      offset,
-      order: [['createdAt', 'DESC']],
-    });
+   const students = await Student.findAndCountAll({
+  where,
+  order: [['createdAt', 'DESC']],
+});
+
 
     res.status(200).json({
       success: true,

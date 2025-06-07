@@ -1,5 +1,5 @@
 const StudentCourse = require('../models/StudentCourse');
-const { Op } = require('sequelize');
+const { Sequelize, Op } = require('sequelize');
 
 const studentCourseController = {
   // CREATE - Add new student course record
@@ -39,7 +39,7 @@ const studentCourseController = {
   // READ - Get all student course records with pagination and filtering
   getAll: async (req, res) => {
     try {
-      const {
+      let {
         page = 1,
         limit = 10,
         courseType,
@@ -51,48 +51,89 @@ const studentCourseController = {
         searchValue,
       } = req.query;
 
+      // Convert page and limit to integers
+      page = parseInt(page);
+      limit = parseInt(limit);
+
       const offset = (page - 1) * limit;
       const whereClause = {};
 
-      // Add filters
+      const user = req.user;
+
+      if (!user || !user.emp_name) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied: Invalid user information',
+        });
+      }
+
+      const { emp_name, has_access, branch: userBranch } = user;
+
+      if (has_access === true) {
+        // existing branch access logic
+        if (req.query.branch) {
+          whereClause.branch = req.query.branch;
+        } else if (Array.isArray(userBranch)) {
+          whereClause.branch = { [Op.in]: userBranch };
+        } else {
+          whereClause.branch = userBranch;
+        }
+      } else {
+        // no access, restrict by staffName1, staffName2, or staffName3 matching emp_name
+        whereClause[Op.or] = [
+          { staffName1: emp_name },
+          { staffName2: emp_name },
+          { staffName3: emp_name }
+        ];
+      }
+
+      // Apply filters
       if (courseType) whereClause.courseType = courseType;
       if (courseName) whereClause.courseName = courseName;
       if (batch) whereClause.batch = batch;
       if (learningMode) whereClause.learningMode = learningMode;
       if (progressStatus) whereClause.ProgressStatus = progressStatus;
 
-      // Add search by selected field only
+      // Apply search on specific field
       if (searchField && searchValue) {
         whereClause[searchField] = {
-          [Op.iLike]: `%${searchValue}%`
+          [Op.iLike]: `%${searchValue}%`,
         };
       }
 
+      // Debug log for pagination (optional, remove in production)
+      console.log('Pagination:', { page, limit, offset });
+
+      // Fetch paginated data
       const { count, rows } = await StudentCourse.findAndCountAll({
         where: whereClause,
-        limit: parseInt(limit),
-        offset: parseInt(offset),
-        order: [['createdAt', 'DESC']]
+        limit,
+        offset,
+        order: [
+          [Sequelize.literal(`CAST(SUBSTRING("studentId" FROM '[0-9]+$') AS INTEGER)`), 'DESC']
+        ]
       });
 
+      // Return paginated response
       res.json({
         success: true,
         data: rows,
         pagination: {
-          currentPage: parseInt(page),
+          currentPage: page,
           totalPages: Math.ceil(count / limit),
           totalRecords: count,
-          recordsPerPage: parseInt(limit)
-        }
+          recordsPerPage: limit,
+        },
       });
     } catch (error) {
       res.status(500).json({
         success: false,
         message: 'Failed to fetch student course records',
-        error: error.message
+        error: error.message,
       });
     }
   },
+
 
   // UPDATE - Update student course record
   update: async (req, res) => {
