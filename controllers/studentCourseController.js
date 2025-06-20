@@ -39,9 +39,7 @@ const studentCourseController = {
   // READ - Get all student course records with pagination and filtering
   getAll: async (req, res) => {
     try {
-      let {
-        page = 1,
-        limit = 10,
+      const {
         courseType,
         courseName,
         batch,
@@ -51,13 +49,7 @@ const studentCourseController = {
         searchValue,
       } = req.query;
 
-      // Convert page and limit to integers
-      page = parseInt(page);
-      limit = parseInt(limit);
-
-      const offset = (page - 1) * limit;
       const whereClause = {};
-
       const user = req.user;
 
       if (!user || !user.emp_name) {
@@ -67,24 +59,34 @@ const studentCourseController = {
         });
       }
 
-      const { emp_name, has_access, branch: userBranch } = user;
+      const { emp_name, branch: userBranch, role } = user;
 
-      if (has_access === true) {
-        // existing branch access logic
+      // Role-based access control
+      if (role === 'Super-Admin') {
+        // Super-Admin can see all records
+        if (req.query.branch) {
+          whereClause.branch = req.query.branch;
+        }
+        // No branch restriction for Super-Admin if no branch specified
+      } else if (role === 'Branch-head') {
         if (req.query.branch) {
           whereClause.branch = req.query.branch;
         } else if (Array.isArray(userBranch)) {
           whereClause.branch = { [Op.in]: userBranch };
-        } else {
+        } else if (userBranch) {
           whereClause.branch = userBranch;
         }
-      } else {
-        // no access, restrict by staffName1, staffName2, or staffName3 matching emp_name
+      } else if (role === 'Trainer') {
         whereClause[Op.or] = [
           { staffName1: emp_name },
           { staffName2: emp_name },
           { staffName3: emp_name }
         ];
+      } else {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied: Insufficient permissions'
+        });
       }
 
       // Apply filters
@@ -101,31 +103,26 @@ const studentCourseController = {
         };
       }
 
-      // Debug log for pagination (optional, remove in production)
-      console.log('Pagination:', { page, limit, offset });
+      console.log('Where Clause:', JSON.stringify(whereClause, null, 2));
 
-      // Fetch paginated data
-      const { count, rows } = await StudentCourse.findAndCountAll({
+      // Fetch ALL data without pagination
+      const allRecords = await StudentCourse.findAll({
         where: whereClause,
-        limit,
-        offset,
-        order: [
-          [Sequelize.literal(`CAST(SUBSTRING("studentId" FROM '[0-9]+$') AS INTEGER)`), 'DESC']
-        ]
+        order: [['id', 'DESC']],
+        logging: console.log, // Shows the actual SQL query
       });
 
-      // Return paginated response
+      console.log('Total records returned:', allRecords.length);
+
+      // Return all records
       res.json({
         success: true,
-        data: rows,
-        pagination: {
-          currentPage: page,
-          totalPages: Math.ceil(count / limit),
-          totalRecords: count,
-          recordsPerPage: limit,
-        },
+        data: allRecords,
+        totalRecords: allRecords.length,
       });
+
     } catch (error) {
+      console.error('Error in getAll:', error);
       res.status(500).json({
         success: false,
         message: 'Failed to fetch student course records',
@@ -133,7 +130,6 @@ const studentCourseController = {
       });
     }
   },
-
 
   // UPDATE - Update student course record
   update: async (req, res) => {

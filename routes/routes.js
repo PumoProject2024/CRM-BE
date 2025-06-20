@@ -4,7 +4,7 @@ const employeeController = require("../controllers/employeeController");
 const authMiddleware = require("../middleware/authMiddleware");
 const { createInvoice, getInvoices } = require('../controllers/invoiceController');
 const { getAllCourses,createCourse,updateCourse,deleteCourse, getCourseByNameAndType,  } = require('../controllers/courseController');
-const { getAllLocations } = require('../controllers/locationController');
+const { getAllLocations,createLocationBranch } = require('../controllers/locationController');
 const passwordController = require("../controllers/passwordController");
 const studentController = require("../controllers/studentController");
 const { getAllEmployeeDetails } = require("../controllers/employeeController");
@@ -12,11 +12,12 @@ const { getAllInvoices } = require('../controllers/invoiceController');
 const studentCourseController = require('../controllers/studentCourseController');
 
 
-
 const router = express.Router();
 
 // POST route to create a new student registration
 router.get('/location', getAllLocations);
+router.post('/loc', createLocationBranch);
+
 
 router.post("/student", studentController.createStudent);
 router.get("/students", authMiddleware,studentController.getAllStudents);
