@@ -60,12 +60,7 @@ const StudentCourse = sequelize.define('StudentCourse', {
   },
   batch: {
     type: DataTypes.STRING,
-    validate: {
-      isIn: {
-        args: [['9AM-11AM', '12PM-2PM', '3PM-5PM', '6PM-8PM']],
-        msg: "Invalid batch time"
-      }
-    }
+ 
   },
   learningMode: {
     type: DataTypes.STRING,
