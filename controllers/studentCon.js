@@ -111,12 +111,35 @@ class StudentRegistrationController {
       }
 
       // CASE 2: Actual registration (existing logic with updated ID generation)
-      const { contactNo, course, adminbranch, courseType } = studentData;
+      const { email_Id,contactNo, course, adminbranch, courseType } = studentData;
       if (!contactNo || !course || !adminbranch) {
         return res.status(400).json({
           message: 'Contact number, course, and admin branch are required.',
         });
       }
+      
+     const existingStudent = await StudentRegistration.findOne({
+  where: {
+    course,
+    [Op.or]: [
+      { email_Id },
+      { contactNo }
+    ]
+  },
+  attributes: ['studentId', 'modified_by', 'email_Id', 'contactNo'],
+});
+
+if (existingStudent) {
+  // Determine which field matched
+  const matchedField = existingStudent.email_Id === email_Id
+    ? `email ${email_Id}`
+    : `contact number ${contactNo}`;
+
+  return res.status(409).json({
+    message: `This ${matchedField} has already registered for the course "${course}" by ${existingStudent.modified_by}.`,
+    registeredBy: existingStudent.modified_by,
+  });
+}
 
       // Generate student ID with course type
       const studentId = await generateNextId(adminbranch, courseType || 'Course');

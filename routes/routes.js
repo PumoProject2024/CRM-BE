@@ -10,6 +10,8 @@ const studentController = require("../controllers/studentController");
 const { getAllEmployeeDetails } = require("../controllers/employeeController");
 const { getAllInvoices } = require('../controllers/invoiceController');
 const studentCourseController = require('../controllers/studentCourseController');
+const attendanceController = require('../controllers/attendanceController');
+
 
 
 const router = express.Router();
@@ -64,6 +66,9 @@ router.post('/student-record', studentCourseController.create);
 router.get('/students-record',authMiddleware, studentCourseController.getAll);
 router.put('/students-record/:id', studentCourseController.update);
 router.get("/trainers",employeeController.getTrainerEmployees);
+
+router.post('/attendance',authMiddleware, attendanceController.createAttendance);
+router.get('/attendance/:student_id', authMiddleware, attendanceController.getAttendanceByStudentId);
 
 
 
