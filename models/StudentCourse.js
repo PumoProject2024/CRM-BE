@@ -174,6 +174,17 @@ const StudentCourse = sequelize.define('StudentCourse', {
   branch: {
     type: DataTypes.STRING
   },
+  project1Score: { type: DataTypes.FLOAT, allowNull: true },
+  project2Score: { type: DataTypes.FLOAT, allowNull: true },
+  project3Score: { type: DataTypes.FLOAT, allowNull: true },
+  communicationScore: { type: DataTypes.FLOAT, allowNull: true },
+  technicalScore: { type: DataTypes.FLOAT, allowNull: true },
+  noOfMocktest: { type: DataTypes.INTEGER, allowNull: true },
+  mockTest1Score: { type: DataTypes.FLOAT, allowNull: true },
+  mockTest2Score: { type: DataTypes.FLOAT, allowNull: true },
+  mockTest3Score: { type: DataTypes.FLOAT, allowNull: true },
+  courseStartDate: { type: DataTypes.DATEONLY, allowNull: true },
+  courseEndDate: { type: DataTypes.DATEONLY, allowNull: true }
 }, {
   tableName: 'student_courses',
   timestamps: true

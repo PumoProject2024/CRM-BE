@@ -69,9 +69,8 @@ router.get("/trainers",employeeController.getTrainerEmployees);
 
 router.post('/attendance',authMiddleware, attendanceController.createAttendance);
 router.get('/attendance/:student_id', authMiddleware, attendanceController.getAttendanceByStudentId);
-
-
-
+router.put('/attendance/:id',authMiddleware, attendanceController.updateAttendance);
+router.delete('/attendance/:id/day/:day',authMiddleware, attendanceController.deleteAttendanceDay);
 
 module.exports = router;
 

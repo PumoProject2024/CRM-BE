@@ -108,7 +108,6 @@ exports.createAttendance = async (req, res) => {
   }
 };
 
-
 // Get All Attendance Records
 exports.getAllAttendance = async (req, res) => {
   try {
@@ -519,6 +518,49 @@ exports.deleteAttendance = async (req, res) => {
     });
   } catch (error) {
     console.error("Error in deleteAttendance:", error);
+    return res.status(500).json({
+      error: "Internal Server Error",
+      details: error.message
+    });
+  }
+};
+
+// Delete a specific day's attendance from a record
+exports.deleteAttendanceDay = async (req, res) => {
+  try {
+    const { id, day } = req.params;
+    const { emp_id } = req.user || {};
+
+    if (!emp_id) {
+      return res.status(401).json({ error: "Unauthorized: Missing user data" });
+    }
+
+    const attendance = await Attendance.findByPk(id);
+
+    if (!attendance) {
+      return res.status(404).json({ error: "Attendance record not found" });
+    }
+
+    const dayField = `day_${day}`;
+
+    if (!attendance[dayField]) {
+      return res.status(400).json({ error: `No attendance found for day ${day}` });
+    }
+
+    // Delete the specific day's attendance data
+    attendance[dayField] = null;
+    attendance.modified_by = emp_id;
+
+    await attendance.save();
+
+    return res.status(200).json({
+      message: `Attendance for day ${day} deleted successfully`,
+      cleared_day: day,
+      attendance_id: attendance.id
+    });
+
+  } catch (error) {
+    console.error("Error in deleteAttendanceDay:", error);
     return res.status(500).json({
       error: "Internal Server Error",
       details: error.message
