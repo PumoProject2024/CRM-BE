@@ -26,13 +26,13 @@ StudentCourse.belongsTo(StudentRegistration, {
 });
 // Attendance associations
 StudentRegistration.hasMany(Attendance, { 
-  foreignKey: "student_id", 
+  foreignKey: "studentId", 
   sourceKey: "studentId",
   as: "attendanceRecords"
 });
 
 Attendance.belongsTo(StudentRegistration, { 
-  foreignKey: "student_id", 
+  foreignKey: "studentId", 
   targetKey: "studentId",
   as: "studentRegistration"
 });

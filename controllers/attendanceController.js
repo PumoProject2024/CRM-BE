@@ -1,10 +1,10 @@
 const Attendance = require('../models/Attendance');
 const { Op } = require('sequelize');
 
-// Create Attendance (your existing code)
+// Create Attendance (updated)
 exports.createAttendance = async (req, res) => {
   try {
-    const { student_id, InTime, OutTime } = req.body;
+    const { studentId, InTime, OutTime } = req.body;  // Changed from student_id to studentId
 
     // Get logged-in user's info (set in auth middleware)
     const { emp_id, emp_name } = req.user || {};
@@ -16,9 +16,9 @@ exports.createAttendance = async (req, res) => {
     console.log("Logged-in User: ", { emp_id, emp_name });
 
     // Validate required fields
-    if (!student_id || !InTime || !OutTime) {
+    if (!studentId || !InTime || !OutTime) {  // Changed from student_id to studentId
       return res.status(400).json({
-        error: "student_id, InTime, and OutTime are required"
+        error: "studentId, InTime, and OutTime are required"  // Changed from student_id to studentId
       });
     }
 
@@ -40,7 +40,7 @@ exports.createAttendance = async (req, res) => {
 
     // Check if attendance record exists for the student, month, and year
     let attendance = await Attendance.findOne({
-      where: { student_id, month, year }
+      where: { studentId, month, year }  // Changed from student_id to studentId
     });
 
     if (attendance) {
@@ -60,7 +60,7 @@ exports.createAttendance = async (req, res) => {
         message: "Attendance updated successfully",
         attendance: {
           id: attendance.id,
-          student_id,
+          studentId,  // Changed from student_id to studentId
           month,
           year,
           day,
@@ -70,7 +70,7 @@ exports.createAttendance = async (req, res) => {
     } else {
       // Create new attendance record
       const newAttendanceData = {
-        student_id,
+        studentId,  // Changed from student_id to studentId
         month,
         year,
         created_by: emp_id,
@@ -84,7 +84,7 @@ exports.createAttendance = async (req, res) => {
         message: "Attendance created successfully",
         attendance: {
           id: attendance.id,
-          student_id,
+          studentId,  // Changed from student_id to studentId
           month,
           year,
           day,
@@ -108,10 +108,10 @@ exports.createAttendance = async (req, res) => {
   }
 };
 
-// Get All Attendance Records
+// Get All Attendance Records (updated)
 exports.getAllAttendance = async (req, res) => {
   try {
-    const { page = 1, limit = 10, month, year, student_id } = req.query;
+    const { page = 1, limit = 10, month, year, studentId } = req.query;  // Changed from student_id to studentId
     const offset = (page - 1) * limit;
 
     // Build where clause based on query parameters
@@ -125,8 +125,8 @@ exports.getAllAttendance = async (req, res) => {
       whereClause.year = year;
     }
     
-    if (student_id) {
-      whereClause.student_id = student_id;
+    if (studentId) {  // Changed from student_id to studentId
+      whereClause.studentId = studentId;
     }
 
     // Get attendance records with pagination
@@ -151,7 +151,7 @@ exports.getAllAttendance = async (req, res) => {
 
       return {
         id: record.id,
-        student_id: record.student_id,
+        studentId: record.studentId,  // Changed from student_id to studentId
         month: record.month,
         year: record.year,
         created_by: record.created_by,
@@ -181,10 +181,10 @@ exports.getAllAttendance = async (req, res) => {
   }
 };
 
-// Get Attendance by Student ID
+// Get Attendance by Student ID (updated)
 exports.getAttendanceByStudentId = async (req, res) => {
   try {
-    const { student_id } = req.params;
+    const { studentId } = req.params;  // Changed from student_id to studentId
     const { 
       month, 
       year, 
@@ -194,15 +194,15 @@ exports.getAttendanceByStudentId = async (req, res) => {
       limit = 10 
     } = req.query;
 
-    // Validate student_id
-    if (!student_id) {
+    // Validate studentId
+    if (!studentId) {  // Changed from student_id to studentId
       return res.status(400).json({
-        error: "student_id is required"
+        error: "studentId is required"  // Changed from student_id to studentId
       });
     }
 
     // Build where clause
-    const whereClause = { student_id };
+    const whereClause = { studentId };  // Changed from student_id to studentId
     
     // Handle date range search
     if (fromDate && toDate) {
@@ -347,7 +347,7 @@ exports.getAttendanceByStudentId = async (req, res) => {
 
       return {
         id: record.id,
-        student_id: record.student_id,
+        studentId: record.studentId,  // Changed from student_id to studentId
         month: record.month,
         year: record.year,
         created_by: record.created_by,
@@ -365,7 +365,7 @@ exports.getAttendanceByStudentId = async (req, res) => {
 
     return res.status(200).json({
       message: "Attendance records retrieved successfully",
-      student_id,
+      studentId,  // Changed from student_id to studentId
       data: transformedRecords,
       pagination: {
         currentPage: pageNumber,
@@ -393,11 +393,11 @@ exports.getAttendanceByStudentId = async (req, res) => {
   }
 };
 
-// Update Attendance
+// Update Attendance (updated)
 exports.updateAttendance = async (req, res) => {
   try {
     const { id } = req.params;
-    const { student_id, InTime, OutTime, day, month, year } = req.body;
+    const { studentId, InTime, OutTime, day, month, year } = req.body;  // Changed from student_id to studentId
 
     // Get logged-in user's info (set in auth middleware)
     const { emp_id, emp_name } = req.user || {};
@@ -442,7 +442,7 @@ exports.updateAttendance = async (req, res) => {
         message: "Attendance updated successfully",
         attendance: {
           id: attendance.id,
-          student_id: attendance.student_id,
+          studentId: attendance.studentId,  // Changed from student_id to studentId
           month: attendance.month,
           year: attendance.year,
           day,
@@ -454,7 +454,7 @@ exports.updateAttendance = async (req, res) => {
     // If updating general attendance record fields
     const updateData = {};
     
-    if (student_id) updateData.student_id = student_id;
+    if (studentId) updateData.studentId = studentId;  // Changed from student_id to studentId
     if (month) updateData.month = month;
     if (year) updateData.year = year;
     updateData.modified_by = emp_id;
@@ -466,7 +466,7 @@ exports.updateAttendance = async (req, res) => {
       message: "Attendance record updated successfully",
       attendance: {
         id: attendance.id,
-        student_id: attendance.student_id,
+        studentId: attendance.studentId,  // Changed from student_id to studentId
         month: attendance.month,
         year: attendance.year,
         modified_by: attendance.modified_by
@@ -488,7 +488,7 @@ exports.updateAttendance = async (req, res) => {
   }
 };
 
-// Delete Attendance (optional)
+// Delete Attendance (no changes needed here)
 exports.deleteAttendance = async (req, res) => {
   try {
     const { id } = req.params;
@@ -525,7 +525,7 @@ exports.deleteAttendance = async (req, res) => {
   }
 };
 
-// Delete a specific day's attendance from a record
+// Delete a specific day's attendance from a record (no changes needed here)
 exports.deleteAttendanceDay = async (req, res) => {
   try {
     const { id, day } = req.params;

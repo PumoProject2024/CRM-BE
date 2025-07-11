@@ -7,7 +7,7 @@ const Attendance = sequelize.define("Attendance", {
         primaryKey: true,
         autoIncrement: true,
     },
-    student_id: {
+    studentId: {  // Changed from student_id to studentId
         type: DataTypes.STRING,
         allowNull: false,
     },
@@ -166,13 +166,13 @@ const Attendance = sequelize.define("Attendance", {
     indexes: [
         {
             unique: true,
-            fields: ['student_id', 'month', 'year']
+            fields: ['studentId', 'month', 'year']  // Changed from student_id to studentId
         },
         {
             fields: ['month', 'year']
         },
         {
-            fields: ['student_id']
+            fields: ['studentId']  // Changed from student_id to studentId
         }
     ]
 });
