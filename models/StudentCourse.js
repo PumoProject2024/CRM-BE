@@ -60,7 +60,7 @@ const StudentCourse = sequelize.define('StudentCourse', {
   },
   batch: {
     type: DataTypes.STRING,
- 
+
   },
   learningMode: {
     type: DataTypes.STRING,
@@ -184,8 +184,11 @@ const StudentCourse = sequelize.define('StudentCourse', {
   mockTest2Score: { type: DataTypes.FLOAT, allowNull: true },
   mockTest3Score: { type: DataTypes.FLOAT, allowNull: true },
   courseStartDate: { type: DataTypes.DATEONLY, allowNull: true },
-  courseEndDate: { type: DataTypes.DATEONLY, allowNull: true }
-}, {
+  courseEndDate: { type: DataTypes.DATEONLY, allowNull: true },
+  email_Id: {  type: DataTypes.STRING, allowNull: true},
+  desiredlocation:{ type: DataTypes.STRING, allowNull: true}
+
+  }, {
   tableName: 'student_courses',
   timestamps: true
 });

@@ -490,50 +490,66 @@ class StudentRegistrationController {
     }
   }
 
-  static async updateStudentRegistrationById(req, res) {
-    try {
-      // ✅ Extract id from request params
-      const { id } = req.params;
-      const updateData = req.body;
+ static async updateStudentRegistrationById(req, res) {
+  try {
+    const { id } = req.params;
+    const { emp_id } = req.user || {};
 
-      // ✅ Ensure the user is authenticated and retrieve their emp_id
-      const { emp_id } = req.user || {};
-
-      if (!emp_id) {
-        return res.status(401).json({
-          error: 'Unauthorized: Missing user information.',
-        });
-      }
-
-      console.log("Logged-in User (emp_id):", emp_id);
-
-      // ✅ Find the student registration by primary key id
-      const student = await StudentRegistration.findByPk(id);
-
-      if (!student) {
-        return res.status(404).json({
-          error: 'Student Registration Not Found',
-        });
-      }
-
-      // ✅ Add the modified_by field (logged-in user's emp_id)
-      updateData.modified_by = emp_id;
-
-      // ✅ Update the student registration
-      await student.update(updateData);
-
-      res.status(200).json({
-        message: 'Student Registration Updated Successfully by ID',
-        student,
-      });
-    } catch (error) {
-      console.error('Error updating student registration by ID:', error);
-      res.status(500).json({
-        error: 'Internal Server Error',
-        details: error.message,
+    if (!emp_id) {
+      return res.status(401).json({
+        error: 'Unauthorized: Missing user information.',
       });
     }
+
+    const student = await StudentRegistration.findByPk(id);
+
+    if (!student) {
+      return res.status(404).json({
+        error: 'Student Registration Not Found',
+      });
+    }
+
+    // ✅ Define only allowed fields to update (excluding email_Id)
+    const allowedFields = [
+      'name',
+      'contactNo',
+      'staffAssigned',
+      'discountAmount',
+      'feesCollected',
+      'pendingFees',
+      'pendingFees2',
+      'pendingFees3',
+      'pendingFees4',
+      'studentProgressStatus',
+      // Add more if needed (but exclude `email_Id`)
+    ];
+
+    const updateData = {};
+
+    for (const field of allowedFields) {
+      if (req.body.hasOwnProperty(field)) {
+        updateData[field] = req.body[field];
+      }
+    }
+
+    // ✅ Include modifier info
+    updateData.modified_by = emp_id;
+
+    await student.update(updateData);
+
+    res.status(200).json({
+      message: 'Student Registration Updated Successfully by ID',
+      student,
+    });
+  } catch (error) {
+    console.error('Error updating student registration by ID:', error);
+    res.status(500).json({
+      error: 'Internal Server Error',
+      details: error.message,
+    });
   }
+}
+
 
   static async getPendingDetails(req, res) {
     try {
@@ -750,7 +766,7 @@ class StudentRegistrationController {
           studentProgressStatus: 'Course Completed',
           placementneeded: 'Yes'
         },
-      limit: limitNum,
+        limit: limitNum,
         offset: (pageNum - 1) * limitNum,
         order: [
           [Sequelize.literal(`CAST(SUBSTRING("studentId" FROM '[0-9]+$') AS INTEGER)`), 'DESC']
