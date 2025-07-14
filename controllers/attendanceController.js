@@ -309,18 +309,30 @@ exports.getAttendanceByStudentId = async (req, res) => {
       offset: offset
     });
 
-    if (!attendanceRecords || attendanceRecords.length === 0) {
-      return res.status(404).json({
-        message: "No attendance records found for this student",
-        pagination: {
-          currentPage: pageNumber,
-          totalPages: 0,
-          totalRecords: 0,
-          hasNextPage: false,
-          hasPreviousPage: false
-        }
-      });
+   if (!attendanceRecords || attendanceRecords.length === 0) {
+  return res.status(200).json({
+    message: "No attendance records found for this student",
+    studentId,
+    data: [],
+    pagination: {
+      currentPage: pageNumber,
+      totalPages: 0,
+      totalRecords: 0,
+      recordsPerPage: pageSize,
+      hasNextPage: false,
+      hasPreviousPage: false,
+      startRecord: 0,
+      endRecord: 0
+    },
+    filters: {
+      month: month || null,
+      year: year || null,
+      fromDate: fromDate || null,
+      toDate: toDate || null
     }
+  });
+}
+
 
     // Transform data to include attendance details for each day
     const transformedRecords = attendanceRecords.map(record => {

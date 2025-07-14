@@ -72,5 +72,8 @@ router.get('/attendance/:studentId', authMiddleware, attendanceController.getAtt
 router.put('/attendance/:id',authMiddleware, attendanceController.updateAttendance);
 router.delete('/attendance/:id/day/:day',authMiddleware, attendanceController.deleteAttendanceDay);
 
+router.get('/placement-ready',authMiddleware ,StudentRegistrationController.getStudentsForPlacement);
+
+
 module.exports = router;
 
