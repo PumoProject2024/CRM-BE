@@ -35,7 +35,6 @@ const studentCourseController = {
       });
     }
   },
-
   // READ - Get all student course records with pagination and filtering
   getAll: async (req, res) => {
     try {
@@ -81,11 +80,38 @@ const studentCourseController = {
           whereClause.branch = userBranch;
         }
       } else if (role === 'Trainer') {
-        whereClause[Op.or] = [
-          { staffName1: emp_name },
-          { staffName2: emp_name },
-          { staffName3: emp_name }
-        ];
+        const { emp_id } = user;
+
+        if (!emp_id) {
+          return res.status(403).json({
+            success: false,
+            message: 'Access denied: Missing employee ID for trainer'
+          });
+        }
+
+        if (role === 'Trainer') {
+          whereClause[Op.or] = [
+            {
+              [Op.and]: [
+                where(fn('LOWER', col('staffName1')), fn('LOWER', emp_name)),
+                { staffId1: emp_id }
+              ]
+            },
+            {
+              [Op.and]: [
+                where(fn('LOWER', col('staffName2')), fn('LOWER', emp_name)),
+                { staffId2: emp_id }
+              ]
+            },
+            {
+              [Op.and]: [
+                where(fn('LOWER', col('staffName3')), fn('LOWER', emp_name)),
+                { staffId3: emp_id }
+              ]
+            }
+          ];
+        }
+
       } else {
         return res.status(403).json({
           success: false,
@@ -188,7 +214,6 @@ const studentCourseController = {
       });
     }
   },
-
   // UPDATE - Update student course record
   update: async (req, res) => {
     try {
@@ -242,74 +267,9 @@ const studentCourseController = {
       });
     }
   },
-
   getPlacementEligibleStudents: async (req, res) => {
-  try {
-    const {
-      courseType,
-      courseName,
-      batch,
-      learningMode,
-      branch,
-      searchField,
-      searchValue,
-      page = 1,
-      limit = 10,
-      sortBy = 'id',
-      sortOrder = 'DESC'
-    } = req.query;
-
-    // Base condition: Only students who need placement and completed course
-    const whereClause = {
-      placementneeded: 'Yes',
-      ProgressStatus: 'Course Completed'
-    };
-
-    // Optional filters
-    if (courseType) whereClause.courseType = courseType;
-    if (courseName) whereClause.courseName = courseName;
-    if (batch) whereClause.batch = batch;
-    if (learningMode) whereClause.learningMode = learningMode;
-    if (branch) whereClause.branch = branch;
-
-    // Optional search
-    if (searchField && searchValue) {
-      whereClause[searchField] = { [Op.iLike]: `%${searchValue}%` };
-    }
-
-    // Pagination
-    const pageNumber = parseInt(page) || 1;
-    const pageSize = parseInt(limit) || 10;
-    const offset = (pageNumber - 1) * pageSize;
-
-    // Sorting
-    const allowedSortFields = ['id', 'courseType', 'courseName', 'batch', 'learningMode', 'createdAt', 'updatedAt'];
-    const sortField = allowedSortFields.includes(sortBy) ? sortBy : 'id';
-    const sortDirection = ['ASC', 'DESC'].includes(sortOrder.toUpperCase()) ? sortOrder.toUpperCase() : 'DESC';
-
-    // Fetch records
-    const { count, rows } = await StudentCourse.findAndCountAll({
-      where: whereClause,
-      limit: pageSize,
-      offset,
-      order: [[sortField, sortDirection]]
-    });
-
-    const totalPages = Math.ceil(count / pageSize);
-
-    return res.json({
-      success: true,
-      data: rows,
-      pagination: {
-        currentPage: pageNumber,
-        totalPages,
-        totalRecords: count,
-        recordsOnCurrentPage: rows.length,
-        recordsPerPage: pageSize,
-        hasNextPage: pageNumber < totalPages,
-        hasPrevPage: pageNumber > 1
-      },
-      filters: {
+    try {
+      const {
         courseType,
         courseName,
         batch,
@@ -317,20 +277,83 @@ const studentCourseController = {
         branch,
         searchField,
         searchValue,
-        sortBy: sortField,
-        sortOrder: sortDirection
+        page = 1,
+        limit = 10,
+        sortBy = 'id',
+        sortOrder = 'DESC'
+      } = req.query;
+
+      // Base condition: Only students who need placement and completed course
+      const whereClause = {
+        placementneeded: 'Yes',
+        ProgressStatus: 'Course Completed'
+      };
+
+      // Optional filters
+      if (courseType) whereClause.courseType = courseType;
+      if (courseName) whereClause.courseName = courseName;
+      if (batch) whereClause.batch = batch;
+      if (learningMode) whereClause.learningMode = learningMode;
+      if (branch) whereClause.branch = branch;
+
+      // Optional search
+      if (searchField && searchValue) {
+        whereClause[searchField] = { [Op.iLike]: `%${searchValue}%` };
       }
-    });
 
-  } catch (error) {
-    console.error('Error in getPlacementEligibleStudents:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch placement eligible students',
-      error: error.message,
-    });
+      // Pagination
+      const pageNumber = parseInt(page) || 1;
+      const pageSize = parseInt(limit) || 10;
+      const offset = (pageNumber - 1) * pageSize;
+
+      // Sorting
+      const allowedSortFields = ['id', 'courseType', 'courseName', 'batch', 'learningMode', 'createdAt', 'updatedAt'];
+      const sortField = allowedSortFields.includes(sortBy) ? sortBy : 'id';
+      const sortDirection = ['ASC', 'DESC'].includes(sortOrder.toUpperCase()) ? sortOrder.toUpperCase() : 'DESC';
+
+      // Fetch records
+      const { count, rows } = await StudentCourse.findAndCountAll({
+        where: whereClause,
+        limit: pageSize,
+        offset,
+        order: [[sortField, sortDirection]]
+      });
+
+      const totalPages = Math.ceil(count / pageSize);
+
+      return res.json({
+        success: true,
+        data: rows,
+        pagination: {
+          currentPage: pageNumber,
+          totalPages,
+          totalRecords: count,
+          recordsOnCurrentPage: rows.length,
+          recordsPerPage: pageSize,
+          hasNextPage: pageNumber < totalPages,
+          hasPrevPage: pageNumber > 1
+        },
+        filters: {
+          courseType,
+          courseName,
+          batch,
+          learningMode,
+          branch,
+          searchField,
+          searchValue,
+          sortBy: sortField,
+          sortOrder: sortDirection
+        }
+      });
+
+    } catch (error) {
+      console.error('Error in getPlacementEligibleStudents:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch placement eligible students',
+        error: error.message,
+      });
+    }
   }
-}
-
 };
 module.exports = studentCourseController;

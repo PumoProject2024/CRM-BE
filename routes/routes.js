@@ -11,6 +11,7 @@ const { getAllEmployeeDetails } = require("../controllers/employeeController");
 const { getAllInvoices } = require('../controllers/invoiceController');
 const studentCourseController = require('../controllers/studentCourseController');
 const attendanceController = require('../controllers/attendanceController');
+const { createPlacement } = require('../controllers/placementcontrollers');
 
 
 
@@ -73,6 +74,13 @@ router.put('/attendance/:id',authMiddleware, attendanceController.updateAttendan
 router.delete('/attendance/:id/day/:day',authMiddleware, attendanceController.deleteAttendanceDay);
 
 router.get('/placement-ready',authMiddleware,studentCourseController.getPlacementEligibleStudents );
+router.post('/placement-details',authMiddleware,createPlacement);
+
+router.post('/logined',StudentRegistrationController.studentLogin);
+router.put('/studentpro/:studentId', StudentRegistrationController.updateStudentProfile);
+
+
+
 
 
 module.exports = router;

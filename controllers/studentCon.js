@@ -1,6 +1,9 @@
 const { Op, Sequelize } = require('sequelize');
 const StudentRegistration = require('../models/studenReg');
+const StudentCourse = require('../models/StudentCourse');
 const sequelize = require('../config/database');
+const { Op, fn, col, where } = require('sequelize');
+
 
 // Now you can use sequelize in your updateStudentRegistration function
 
@@ -199,12 +202,28 @@ class StudentRegistrationController {
 
       // Ensure branch filtering
       if (role === "Trainer") {
-        options.where.staffAssigned = emp_name;
+        options.where = {
+          ...options.where,
+          [Op.and]: [
+            where(fn('LOWER', col('staffAssigned')), fn('LOWER', emp_name)),
+            { adminbranch: { [Op.in]: allowedBranches } }
+          ]
+        };
       } else if (role === "BDE" && req.user.has_access === false) {
-        options.where.adminEmpName = emp_name;
+        options.where = {
+          ...options.where,
+          [Op.and]: [
+            where(fn('LOWER', col('adminEmpName')), fn('LOWER', emp_name)),
+            { adminbranch: { [Op.in]: allowedBranches } }
+          ]
+        };
       } else {
-        options.where.adminbranch = { [Op.in]: allowedBranches };
+        options.where = {
+          ...options.where,
+          adminbranch: { [Op.in]: allowedBranches }
+        };
       }
+
 
       // Filter for payments due today
       if (dueToday === "true") {
@@ -490,66 +509,65 @@ class StudentRegistrationController {
     }
   }
 
- static async updateStudentRegistrationById(req, res) {
-  try {
-    const { id } = req.params;
-    const { emp_id } = req.user || {};
+  static async updateStudentRegistrationById(req, res) {
+    try {
+      const { id } = req.params;
+      const { emp_id } = req.user || {};
 
-    if (!emp_id) {
-      return res.status(401).json({
-        error: 'Unauthorized: Missing user information.',
-      });
-    }
-
-    const student = await StudentRegistration.findByPk(id);
-
-    if (!student) {
-      return res.status(404).json({
-        error: 'Student Registration Not Found',
-      });
-    }
-
-    // ✅ Define only allowed fields to update (excluding email_Id)
-    const allowedFields = [
-      'name',
-      'contactNo',
-      'staffAssigned',
-      'discountAmount',
-      'feesCollected',
-      'pendingFees',
-      'pendingFees2',
-      'pendingFees3',
-      'pendingFees4',
-      'studentProgressStatus',
-      // Add more if needed (but exclude `email_Id`)
-    ];
-
-    const updateData = {};
-
-    for (const field of allowedFields) {
-      if (req.body.hasOwnProperty(field)) {
-        updateData[field] = req.body[field];
+      if (!emp_id) {
+        return res.status(401).json({
+          error: 'Unauthorized: Missing user information.',
+        });
       }
+
+      const student = await StudentRegistration.findByPk(id);
+
+      if (!student) {
+        return res.status(404).json({
+          error: 'Student Registration Not Found',
+        });
+      }
+
+      // ✅ Define only allowed fields to update (excluding email_Id)
+      const allowedFields = [
+        'name',
+        'contactNo',
+        'staffAssigned',
+        'discountAmount',
+        'feesCollected',
+        'pendingFees',
+        'pendingFees2',
+        'pendingFees3',
+        'pendingFees4',
+        'studentProgressStatus',
+        // Add more if needed (but exclude `email_Id`)
+      ];
+
+      const updateData = {};
+
+      for (const field of allowedFields) {
+        if (req.body.hasOwnProperty(field)) {
+          updateData[field] = req.body[field];
+        }
+      }
+
+      // ✅ Include modifier info
+      updateData.modified_by = emp_id;
+
+      await student.update(updateData);
+
+      res.status(200).json({
+        message: 'Student Registration Updated Successfully by ID',
+        student,
+      });
+    } catch (error) {
+      console.error('Error updating student registration by ID:', error);
+      res.status(500).json({
+        error: 'Internal Server Error',
+        details: error.message,
+      });
     }
-
-    // ✅ Include modifier info
-    updateData.modified_by = emp_id;
-
-    await student.update(updateData);
-
-    res.status(200).json({
-      message: 'Student Registration Updated Successfully by ID',
-      student,
-    });
-  } catch (error) {
-    console.error('Error updating student registration by ID:', error);
-    res.status(500).json({
-      error: 'Internal Server Error',
-      details: error.message,
-    });
   }
-}
-
 
   static async getPendingDetails(req, res) {
     try {
@@ -830,6 +848,163 @@ class StudentRegistrationController {
     } catch (error) {
       console.error("Error fetching students for placement:", error);
       res.status(500).json({ error: "Internal Server Error", details: error.message });
+    }
+  }
+
+  static async studentLogin(req, res) {
+    try {
+      const email = req.body.email_Id || req.body.email_id;
+      const password = req.body.password;
+
+      if (!email || !password) {
+        return res.status(400).json({
+          success: false,
+          message: 'Email and password are required',
+        });
+      }
+
+      // Find student details first
+      const student = await StudentRegistration.findOne({
+        where: { email_Id: email },
+        attributes: [
+          'studentId',
+          'name',
+          'email_Id',
+          'contactNo',
+          'ParentNo',
+          'address',
+          'educationLevel',
+          'department',
+          'clg_name',
+          'educationCourse',
+          'studentStatus',
+          'dob',
+          'studentRequirement',
+          'courseType',
+          'course',
+          'adminlocation',
+          'adminbranch',
+          'staffAssigned'
+        ]
+      });
+
+      if (!student) {
+        return res.status(404).json({
+          success: false,
+          message: 'Student not found with this email',
+        });
+      }
+
+      if (student.studentId !== password) {
+        return res.status(401).json({
+          success: false,
+          message: 'Invalid password',
+        });
+      }
+
+      // ✅ Now fetch course details from StudentCourse
+      const courseDetails = await StudentCourse.findOne({
+        where: { studentId: student.studentId },
+        attributes: [
+          'syllabusCovered',
+          'courseStartDate',
+          'courseEndDate',
+          'mockTest1Score',
+          'mockTest2Score',
+          'mockTest3Score',
+          'technicalScore',
+          'communicationScore',
+          'project1Score',
+          'project2Score',
+          'project3Score',
+          'projectTitle1',
+          'projectTitle2',
+          'projectTitle3',
+          'project1Status',
+          'project2Status',
+          'project3Status'
+        ]
+      });
+
+      // Combine data
+      const response = {
+        ...student.toJSON(),
+        courseDetails: courseDetails ? courseDetails.toJSON() : null
+      };
+
+      res.status(200).json({
+        success: true,
+        message: 'Login successful',
+        student: response
+      });
+
+    } catch (error) {
+      console.error('Login error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Internal server error',
+        error: error.message,
+      });
+    }
+  }
+
+  static async updateStudentProfile(req, res) {
+    try {
+      const { studentId } = req.params;
+
+      const {
+        name,
+        email_Id,
+        contactNo,
+        ParentNo,
+        address,
+        educationLevel,
+        department,
+        clg_name,
+        educationCourse,
+        studentStatus,
+        dob,
+        studentRequirement
+      } = req.body;
+
+      // Update StudentRegistration
+      const [updatedRows] = await StudentRegistration.update({
+        name,
+        email_Id,
+        contactNo,
+        ParentNo,
+        address,
+        educationLevel,
+        department,
+        clg_name,
+        educationCourse,
+        studentStatus,
+        dob,
+        studentRequirement
+      }, {
+        where: { studentId }
+      });
+
+      // Optional: update StudentCourse with relevant fields
+      await StudentCourse.update({
+        studentName: name,
+        email_Id,
+        studentContactNumber: contactNo,
+        educationQualification: educationLevel,
+        clgName: clg_name
+      }, {
+        where: { studentId }
+      });
+
+      if (updatedRows === 0) {
+        return res.status(404).json({ success: false, message: 'Student not found.' });
+      }
+
+      return res.status(200).json({ success: true, message: 'Student profile updated successfully.' });
+
+    } catch (error) {
+      console.error('Update error:', error);
+      return res.status(500).json({ success: false, message: 'Internal server error', error: error.message });
     }
   }
 
