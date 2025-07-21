@@ -36,6 +36,7 @@ const studentCourseController = {
     }
   },
   // READ - Get all student course records with pagination and filtering
+
   getAll: async (req, res) => {
     try {
       const {
@@ -62,8 +63,8 @@ const studentCourseController = {
         });
       }
 
-      const { emp_name, branch: userBranch, role } = user;
-
+      const { emp_name, emp_id, branch: userBranch, role } = user;
+      const empIdStr = String(emp_id);
       // Role-based access control
       if (role === 'Super-Admin') {
         // Super-Admin can see all records
@@ -80,37 +81,26 @@ const studentCourseController = {
           whereClause.branch = userBranch;
         }
       } else if (role === 'Trainer') {
-        const { emp_id } = user;
-
-        if (!emp_id) {
-          return res.status(403).json({
-            success: false,
-            message: 'Access denied: Missing employee ID for trainer'
-          });
-        }
-
-        if (role === 'Trainer') {
-          whereClause[Op.or] = [
-            {
-              [Op.and]: [
-                where(fn('LOWER', col('staffName1')), fn('LOWER', emp_name)),
-                { staffId1: emp_id }
-              ]
-            },
-            {
-              [Op.and]: [
-                where(fn('LOWER', col('staffName2')), fn('LOWER', emp_name)),
-                { staffId2: emp_id }
-              ]
-            },
-            {
-              [Op.and]: [
-                where(fn('LOWER', col('staffName3')), fn('LOWER', emp_name)),
-                { staffId3: emp_id }
-              ]
-            }
-          ];
-        }
+        whereClause[Op.or] = [
+          {
+            [Op.and]: [
+              { staffName1: emp_name },
+              { staffId1: empIdStr }
+            ]
+          },
+          {
+            [Op.and]: [
+              { staffName2: emp_name },
+              { staffId2: empIdStr }
+            ]
+          },
+          {
+            [Op.and]: [
+              { staffName3: emp_name },
+              { staffId3: empIdStr }
+            ]
+          }
+        ];
 
       } else {
         return res.status(403).json({
@@ -214,6 +204,7 @@ const studentCourseController = {
       });
     }
   },
+
   // UPDATE - Update student course record
   update: async (req, res) => {
     try {
