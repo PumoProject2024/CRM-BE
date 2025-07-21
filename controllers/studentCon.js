@@ -2,7 +2,7 @@ const { Op, Sequelize } = require('sequelize');
 const StudentRegistration = require('../models/studenReg');
 const StudentCourse = require('../models/StudentCourse');
 const sequelize = require('../config/database');
-const { Op, fn, col, where } = require('sequelize');
+const { fn, col, where } = require('sequelize');
 
 
 // Now you can use sequelize in your updateStudentRegistration function
