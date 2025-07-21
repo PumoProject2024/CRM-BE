@@ -161,7 +161,6 @@ class StudentRegistrationController {
       res.status(500).json({ error: 'Internal Server Error' });
     }
   }
-
   static async getAllStudentRegistrations(req, res) {
     try {
       const {
