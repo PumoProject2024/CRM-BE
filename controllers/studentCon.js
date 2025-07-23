@@ -883,6 +883,7 @@ class StudentRegistrationController {
           'course',
           'adminlocation',
           'adminbranch',
+          'profilePicPath',
           'staffAssigned'
         ]
       });
@@ -1006,6 +1007,96 @@ class StudentRegistrationController {
       return res.status(500).json({ success: false, message: 'Internal server error', error: error.message });
     }
   }
+
+  static async getStudentById(req, res) {
+  try {
+    const { studentId } = req.params;
+
+    if (!studentId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Student ID is required',
+      });
+    }
+
+    // Find student details from StudentRegistration
+    const student = await StudentRegistration.findOne({
+      where: { studentId: studentId },
+      attributes: [
+        'studentId',
+        'name',
+        'email_Id',
+        'contactNo',
+        'ParentNo',
+        'address',
+        'educationLevel',
+        'department',
+        'clg_name',
+        'educationCourse',
+        'studentStatus',
+        'dob',
+        'studentRequirement',
+        'courseType',
+        'course',
+        'adminlocation',
+        'adminbranch',
+        'profilePicPath',
+        'staffAssigned'
+      ]
+    });
+
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: 'Student not found with this ID',
+      });
+    }
+
+    // Fetch course details from StudentCourse
+    const courseDetails = await StudentCourse.findOne({
+      where: { studentId: student.studentId },
+      attributes: [
+        'syllabusCovered',
+        'courseStartDate',
+        'courseEndDate',
+        'mockTest1Score',
+        'mockTest2Score',
+        'mockTest3Score',
+        'technicalScore',
+        'communicationScore',
+        'project1Score',
+        'project2Score',
+        'project3Score',
+        'projectTitle1',
+        'projectTitle2',
+        'projectTitle3',
+        'project1Status',
+        'project2Status',
+        'project3Status'
+      ]
+    });
+
+    // Combine data
+    const response = {
+      ...student.toJSON(),
+      courseDetails: courseDetails ? courseDetails.toJSON() : null
+    };
+
+    res.status(200).json({
+      success: true,
+      message: 'Student data retrieved successfully',
+      student: response
+    });
+
+  } catch (error) {
+    console.error('Get student error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message,
+    });
+  }
+}
 
   // Ensure your route uses studentId
 }

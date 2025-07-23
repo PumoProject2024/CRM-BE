@@ -265,6 +265,15 @@ const StudentRegistration = sequelize.define('StudentRegistration', {
     type: DataTypes.STRING,
     allowNull: true,
   },
+  profilePicPath: {
+  type: DataTypes.STRING,
+  allowNull: true
+},
+resumePath: {
+  type: DataTypes.STRING,
+  allowNull: true
+}
+
 }, {
   tableName: 'student_registrations',
   timestamps: true

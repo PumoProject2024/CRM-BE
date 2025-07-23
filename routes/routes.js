@@ -12,6 +12,7 @@ const { getAllInvoices } = require('../controllers/invoiceController');
 const studentCourseController = require('../controllers/studentCourseController');
 const attendanceController = require('../controllers/attendanceController');
 const { createPlacement } = require('../controllers/placementcontrollers');
+const { upload, uploadFile } = require('../controllers/uploadController');
 
 
 
@@ -78,6 +79,9 @@ router.post('/placement-details',authMiddleware,createPlacement);
 
 router.post('/logined',StudentRegistrationController.studentLogin);
 router.put('/studentpro/:studentId', StudentRegistrationController.updateStudentProfile);
+router.get('/student/:studentId', StudentRegistrationController.getStudentById);
+router.post('/upload-profile', upload.single('profilePic'), uploadFile);
+router.post('/upload-resume', upload.single('resume'), uploadFile);
 
 
 

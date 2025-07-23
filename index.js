@@ -20,6 +20,10 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(compression());
 
+const path = require('path');
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+
 // Request logging middleware
 app.use((req, res, next) => {
     console.log(`Incoming request: ${req.method} ${req.url}`);
