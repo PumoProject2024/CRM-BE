@@ -51,7 +51,7 @@ router.get('/all-invoices',authMiddleware,getAllInvoices);
 
 // GET route to fetch all student registrations
 router.get('/allregistrations',authMiddleware, StudentRegistrationController.getAllStudentRegistrations);
-
+router.get('/completedCourse',authMiddleware, StudentRegistrationController.getCompletedStudentsWithNoPendingFees);
 router.put('/registrations/:studentId', authMiddleware,StudentRegistrationController.updateStudentRegistration);
 router.put('/update/:id',authMiddleware,StudentRegistrationController.updateStudentRegistrationById);
 
@@ -66,6 +66,7 @@ router.delete("/employees/:emp_id", employeeController.deleteEmployeeById);
 
 router.post('/student-record', studentCourseController.create);
 router.get('/students-record',authMiddleware, studentCourseController.getAll);
+router.get('/placed-record',authMiddleware, studentCourseController.placed);
 router.put('/students-record/:id', studentCourseController.update);
 router.get("/trainers",employeeController.getTrainerEmployees);
 

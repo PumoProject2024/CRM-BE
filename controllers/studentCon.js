@@ -8,6 +8,7 @@ const { fn, col, where } = require('sequelize');
 // Now you can use sequelize in your updateStudentRegistration function
 
 // Add this utility function (can be in a separate utils file or at the top of your controller)
+
 const BRANCH_ABBREVIATIONS = {
   "Tambaram": "TM",
   "Velachery": "VL",
@@ -161,6 +162,7 @@ class StudentRegistrationController {
       res.status(500).json({ error: 'Internal Server Error' });
     }
   }
+
   static async getAllStudentRegistrations(req, res) {
     try {
       const {
@@ -170,8 +172,8 @@ class StudentRegistrationController {
         searchField,
         dueToday,
         todaysAdmission,
-        pendingFeesList, // Existing parameter for pending fees filter
-        pendingFeesOverdue, // NEW parameter for overdue fees filter
+        pendingFeesList,
+        pendingFeesOverdue,
         fromDate,
         toDate,
         ...filters
@@ -180,8 +182,49 @@ class StudentRegistrationController {
       const pageNum = parseInt(page, 10);
       const limitNum = parseInt(limit, 10);
 
+      const completionStatuses = [
+        'Course Completed',
+        'Course and Certified Completed',
+        'Course Completed, Certified, and Successfully Placed'
+      ];
+
       const options = {
-        where: {},
+        where: {
+          // EXCLUDE students with completion status AND no pending fees
+          [Op.not]: {
+            [Op.and]: [
+              { studentProgressStatus: { [Op.in]: completionStatuses } },
+              {
+                [Op.and]: [
+                  {
+                    [Op.or]: [
+                      { pendingFees: { [Op.eq]: 0 } },
+                      { pendingFees: { [Op.is]: null } }
+                    ]
+                  },
+                  {
+                    [Op.or]: [
+                      { pendingFees2: { [Op.eq]: 0 } },
+                      { pendingFees2: { [Op.is]: null } }
+                    ]
+                  },
+                  {
+                    [Op.or]: [
+                      { pendingFees3: { [Op.eq]: 0 } },
+                      { pendingFees3: { [Op.is]: null } }
+                    ]
+                  },
+                  {
+                    [Op.or]: [
+                      { pendingFees4: { [Op.eq]: 0 } },
+                      { pendingFees4: { [Op.is]: null } }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        },
         limit: limitNum,
         offset: (pageNum - 1) * limitNum,
         order: [
@@ -223,10 +266,9 @@ class StudentRegistrationController {
         };
       }
 
-
       // Filter for payments due today
       if (dueToday === "true") {
-        const todayDate = new Date().toISOString().split("T")[0]; // Get YYYY-MM-DD format
+        const todayDate = new Date().toISOString().split("T")[0];
         options.where[Op.or] = [
           { pendingFeesDate: { [Op.eq]: Sequelize.literal(`'${todayDate}'::date`) } },
           { pendingFeesDate2: { [Op.eq]: Sequelize.literal(`'${todayDate}'::date`) } },
@@ -245,7 +287,7 @@ class StudentRegistrationController {
         ];
       }
 
-      // NEW: Filter for overdue pending fees - shows students with pending fees where due date has passed
+      // Filter for overdue pending fees
       if (pendingFeesOverdue === "true") {
         const todayDate = new Date().toISOString().split("T")[0];
         options.where[Op.or] = [
@@ -286,11 +328,9 @@ class StudentRegistrationController {
       }
 
       if (fromDate && toDate) {
-        // Ensure dates are properly formatted
         const validFromDate = new Date(fromDate).toISOString().split("T")[0];
         const validToDate = new Date(toDate).toISOString().split("T")[0];
 
-        // Add date range filter to the query
         options.where = {
           ...options.where,
           dateOfAdmission: {
@@ -322,11 +362,10 @@ class StudentRegistrationController {
         return res.status(400).json({ error: "Invalid search field" });
       }
 
-      // Function to handle date searching - improved version
+      // Function to handle date searching
       const parseDateSearch = (search) => {
         if (!search || search.trim() === "") return null;
 
-        // Handle simple year, month, or day search (single numbers)
         if (/^\d{1,4}$/.test(search)) {
           const num = parseInt(search, 10);
           return {
@@ -338,29 +377,23 @@ class StudentRegistrationController {
           };
         }
 
-        // Complete date format (YYYY-MM-DD)
         const fullDateRegex = /^\d{4}-\d{2}-\d{2}$/;
         if (fullDateRegex.test(search)) {
           return { [Op.eq]: Sequelize.literal(`'${search}'::date`) };
         }
 
-        // Handle partial date formats
-        let year, month, day;
-
-        // Year only (YYYY-)
         if (/^\d{4}-$/.test(search)) {
-          year = parseInt(search.substring(0, 4), 10);
+          const year = parseInt(search.substring(0, 4), 10);
           return Sequelize.where(
             Sequelize.fn('extract', Sequelize.literal('year from "pendingFeesDate"')),
             year
           );
         }
 
-        // Year and month (YYYY-MM-)
         if (/^\d{4}-\d{1,2}-?$/.test(search)) {
           const parts = search.split('-');
-          year = parseInt(parts[0], 10);
-          month = parts[1] ? parseInt(parts[1], 10) : null;
+          const year = parseInt(parts[0], 10);
+          const month = parts[1] ? parseInt(parts[1], 10) : null;
 
           let conditions = [
             Sequelize.where(Sequelize.fn('extract', Sequelize.literal('year from "pendingFeesDate"')), year)
@@ -375,7 +408,6 @@ class StudentRegistrationController {
           return { [Op.and]: conditions };
         }
 
-        // Partial date with some components (handles various formats more flexibly)
         const partialDateRegex = /^(\d{4})(?:-(\d{1,2}))?(?:-(\d{1,2}))?$/;
         const match = search.match(partialDateRegex);
 
@@ -384,21 +416,21 @@ class StudentRegistrationController {
           let conditions = [];
 
           if (yearStr) {
-            year = parseInt(yearStr, 10);
+            const year = parseInt(yearStr, 10);
             conditions.push(
               Sequelize.where(Sequelize.fn('extract', Sequelize.literal('year from "pendingFeesDate"')), year)
             );
           }
 
           if (monthStr) {
-            month = parseInt(monthStr, 10);
+            const month = parseInt(monthStr, 10);
             conditions.push(
               Sequelize.where(Sequelize.fn('extract', Sequelize.literal('month from "pendingFeesDate"')), month)
             );
           }
 
           if (dayStr) {
-            day = parseInt(dayStr, 10);
+            const day = parseInt(dayStr, 10);
             conditions.push(
               Sequelize.where(Sequelize.fn('extract', Sequelize.literal('day from "pendingFeesDate"')), day)
             );
@@ -425,7 +457,6 @@ class StudentRegistrationController {
           }
 
           if (searchField === "pendingFeesDate" || searchField === "pendingFeesDate2") {
-            // Search across both fields
             options.where[Op.or] = [
               { pendingFeesDate: dateSearchCondition },
               { pendingFeesDate2: dateSearchCondition }
@@ -922,6 +953,7 @@ class StudentRegistrationController {
           'projectTitle3',
           'project1Status',
           'project2Status',
+          'desiredlocation',
           'project3Status'
         ]
       });
@@ -964,7 +996,8 @@ class StudentRegistrationController {
         educationCourse,
         studentStatus,
         dob,
-        studentRequirement
+        studentRequirement,
+        desiredlocation // ✅ NEW FIELD
       } = req.body;
 
       // Update StudentRegistration
@@ -985,13 +1018,14 @@ class StudentRegistrationController {
         where: { studentId }
       });
 
-      // Optional: update StudentCourse with relevant fields
+      // Update StudentCourse
       await StudentCourse.update({
         studentName: name,
         email_Id,
         studentContactNumber: contactNo,
         educationQualification: educationLevel,
-        clgName: clg_name
+        clgName: clg_name,
+        desiredlocation: Array.isArray(desiredlocation) ? desiredlocation.join(",") : desiredlocation
       }, {
         where: { studentId }
       });
@@ -1009,95 +1043,323 @@ class StudentRegistrationController {
   }
 
   static async getStudentById(req, res) {
-  try {
-    const { studentId } = req.params;
+    try {
+      const { studentId } = req.params;
 
-    if (!studentId) {
-      return res.status(400).json({
+      if (!studentId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Student ID is required',
+        });
+      }
+
+      // Find student details from StudentRegistration
+      const student = await StudentRegistration.findOne({
+        where: { studentId: studentId },
+        attributes: [
+          'studentId',
+          'name',
+          'email_Id',
+          'contactNo',
+          'ParentNo',
+          'address',
+          'educationLevel',
+          'department',
+          'clg_name',
+          'educationCourse',
+          'studentStatus',
+          'dob',
+          'studentRequirement',
+          'courseType',
+          'course',
+          'adminlocation',
+          'adminbranch',
+          'profilePicPath',
+          'staffAssigned'
+        ]
+      });
+
+      if (!student) {
+        return res.status(404).json({
+          success: false,
+          message: 'Student not found with this ID',
+        });
+      }
+
+      // Fetch course details from StudentCourse
+      const courseDetails = await StudentCourse.findOne({
+        where: { studentId: student.studentId },
+        attributes: [
+          'syllabusCovered',
+          'courseStartDate',
+          'courseEndDate',
+          'mockTest1Score',
+          'mockTest2Score',
+          'mockTest3Score',
+          'technicalScore',
+          'communicationScore',
+          'project1Score',
+          'project2Score',
+          'project3Score',
+          'projectTitle1',
+          'projectTitle2',
+          'projectTitle3',
+          'project1Status',
+          'project2Status',
+          'project3Status',
+          'desiredlocation'
+        ]
+      });
+
+      // Combine data
+      const response = {
+        ...student.toJSON(),
+        courseDetails: courseDetails ? courseDetails.toJSON() : null
+      };
+
+      res.status(200).json({
+        success: true,
+        message: 'Student data retrieved successfully',
+        student: response
+      });
+
+    } catch (error) {
+      console.error('Get student error:', error);
+      res.status(500).json({
         success: false,
-        message: 'Student ID is required',
+        message: 'Internal server error',
+        error: error.message,
       });
     }
-
-    // Find student details from StudentRegistration
-    const student = await StudentRegistration.findOne({
-      where: { studentId: studentId },
-      attributes: [
-        'studentId',
-        'name',
-        'email_Id',
-        'contactNo',
-        'ParentNo',
-        'address',
-        'educationLevel',
-        'department',
-        'clg_name',
-        'educationCourse',
-        'studentStatus',
-        'dob',
-        'studentRequirement',
-        'courseType',
-        'course',
-        'adminlocation',
-        'adminbranch',
-        'profilePicPath',
-        'staffAssigned'
-      ]
-    });
-
-    if (!student) {
-      return res.status(404).json({
-        success: false,
-        message: 'Student not found with this ID',
-      });
-    }
-
-    // Fetch course details from StudentCourse
-    const courseDetails = await StudentCourse.findOne({
-      where: { studentId: student.studentId },
-      attributes: [
-        'syllabusCovered',
-        'courseStartDate',
-        'courseEndDate',
-        'mockTest1Score',
-        'mockTest2Score',
-        'mockTest3Score',
-        'technicalScore',
-        'communicationScore',
-        'project1Score',
-        'project2Score',
-        'project3Score',
-        'projectTitle1',
-        'projectTitle2',
-        'projectTitle3',
-        'project1Status',
-        'project2Status',
-        'project3Status'
-      ]
-    });
-
-    // Combine data
-    const response = {
-      ...student.toJSON(),
-      courseDetails: courseDetails ? courseDetails.toJSON() : null
-    };
-
-    res.status(200).json({
-      success: true,
-      message: 'Student data retrieved successfully',
-      student: response
-    });
-
-  } catch (error) {
-    console.error('Get student error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error',
-      error: error.message,
-    });
   }
-}
+  // New controller for completed students with no pending fees
+  static async getCompletedStudentsWithNoPendingFees(req, res) {
+    try {
+      const {
+        page = 1,
+        limit = 10,
+        search,
+        searchField,
+        fromDate,
+        toDate,
+        ...filters
+      } = req.query;
 
+      const pageNum = parseInt(page, 10);
+      const limitNum = parseInt(limit, 10);
+
+      const completionStatuses = [
+        'Course Completed',
+        'Course and Certified Completed',
+        'Course Completed, Certified, and Successfully Placed'
+      ];
+
+      const options = {
+        where: {
+          // Filter for specific completion statuses
+          studentProgressStatus: { [Op.in]: completionStatuses },
+          // Ensure all pending fees are 0 or null
+          [Op.and]: [
+            {
+              [Op.or]: [
+                { pendingFees: { [Op.eq]: 0 } },
+                { pendingFees: { [Op.is]: null } }
+              ]
+            },
+            {
+              [Op.or]: [
+                { pendingFees2: { [Op.eq]: 0 } },
+                { pendingFees2: { [Op.is]: null } }
+              ]
+            },
+            {
+              [Op.or]: [
+                { pendingFees3: { [Op.eq]: 0 } },
+                { pendingFees3: { [Op.is]: null } }
+              ]
+            },
+            {
+              [Op.or]: [
+                { pendingFees4: { [Op.eq]: 0 } },
+                { pendingFees4: { [Op.is]: null } }
+              ]
+            }
+          ]
+        },
+        limit: limitNum,
+        offset: (pageNum - 1) * limitNum,
+        order: [
+          [Sequelize.literal(`CAST(SUBSTRING("studentId" FROM '[0-9]+$') AS INTEGER)`), 'DESC']
+        ]
+      };
+
+      // Extract allowed branches from user
+      const { role, emp_name, branch: allowedBranches } = req.user;
+
+      if (!role || !emp_name) {
+        return res.status(403).json({ message: "Access denied: User role or emp_name is missing" });
+      }
+      if (!allowedBranches || allowedBranches.length === 0) {
+        return res.status(403).json({ message: "Access denied: No branch assigned" });
+      }
+
+      // Apply role-based filtering
+      if (role === "Trainer") {
+        options.where = {
+          ...options.where,
+          [Op.and]: [
+            ...options.where[Op.and],
+            where(fn('LOWER', col('staffAssigned')), fn('LOWER', emp_name)),
+            { adminbranch: { [Op.in]: allowedBranches } }
+          ]
+        };
+      } else if (role === "BDE" && req.user.has_access === false) {
+        options.where = {
+          ...options.where,
+          [Op.and]: [
+            ...options.where[Op.and],
+            where(fn('LOWER', col('adminEmpName')), fn('LOWER', emp_name)),
+            { adminbranch: { [Op.in]: allowedBranches } }
+          ]
+        };
+      } else {
+        options.where = {
+          ...options.where,
+          adminbranch: { [Op.in]: allowedBranches }
+        };
+      }
+
+      // Date range filter
+      if (fromDate && toDate) {
+        const validFromDate = new Date(fromDate).toISOString().split("T")[0];
+        const validToDate = new Date(toDate).toISOString().split("T")[0];
+
+        options.where = {
+          ...options.where,
+          dateOfAdmission: {
+            [Op.between]: [
+              Sequelize.literal(`'${validFromDate}'::date`),
+              Sequelize.literal(`'${validToDate}'::date`)
+            ]
+          }
+        };
+      }
+
+      // Comprehensive field categorization (same as original)
+      const fieldTypes = {
+        stringFields: [
+          "name", "contactNo", "course", "batch", "adminbranch", "learningMode",
+          "educationLevel", "educationCourse", "department", "studentStatus",
+          "courseType", "courseDuration", "classType", "demoGivenBy",
+          "registrationPaymentMode", "registrationReferenceNo",
+          "adminEmpName", "source", "studentRequestedLocation",
+          "studentRequestedBranch", "adminlocation", "staffAssigned", "studentId",
+          "studentProgressStatus"
+        ],
+        decimalFields: ["courseFees", "feesCollected", "pendingFees", "discountAmount", "pendingFees2", "pendingFees3", "pendingFees4"],
+        numericFields: ["id", "placementneeded"],
+        dateFields: ["dob", "demoGivenDate", "dateOfAdmission", "pendingFeesDate", "pendingFeesDate2", "pendingFeesDate3", "pendingFeesDate4"]
+      };
+
+      // Validate searchField
+      if (searchField && !Object.values(fieldTypes).flat().includes(searchField)) {
+        return res.status(400).json({ error: "Invalid search field" });
+      }
+
+      // Apply search filter if present (same logic as original)
+      if (search && searchField) {
+        if (fieldTypes.stringFields.includes(searchField)) {
+          options.where[searchField] = { [Op.iLike]: `%${search}%` };
+        } else if (fieldTypes.numericFields.includes(searchField)) {
+          options.where[searchField] = isNaN(search) ? null : parseInt(search);
+        } else if (fieldTypes.decimalFields.includes(searchField)) {
+          options.where[searchField] = isNaN(search) ? null : parseFloat(search);
+        } else if (fieldTypes.dateFields.includes(searchField)) {
+          // Use the same parseDateSearch function from original controller
+          const parseDateSearch = (search) => {
+            if (!search || search.trim() === "") return null;
+
+            if (/^\d{1,4}$/.test(search)) {
+              const num = parseInt(search, 10);
+              return {
+                [Op.or]: [
+                  Sequelize.where(Sequelize.fn('extract', Sequelize.literal('year from "' + searchField + '"')), num),
+                  Sequelize.where(Sequelize.fn('extract', Sequelize.literal('month from "' + searchField + '"')), num),
+                  Sequelize.where(Sequelize.fn('extract', Sequelize.literal('day from "' + searchField + '"')), num)
+                ]
+              };
+            }
+
+            const fullDateRegex = /^\d{4}-\d{2}-\d{2}$/;
+            if (fullDateRegex.test(search)) {
+              return { [Op.eq]: Sequelize.literal(`'${search}'::date`) };
+            }
+
+            const partialDateRegex = /^(\d{4})(?:-(\d{1,2}))?(?:-(\d{1,2}))?$/;
+            const match = search.match(partialDateRegex);
+
+            if (match) {
+              const [, yearStr, monthStr, dayStr] = match;
+              let conditions = [];
+
+              if (yearStr) {
+                conditions.push(
+                  Sequelize.where(Sequelize.fn('extract', Sequelize.literal('year from "' + searchField + '"')), parseInt(yearStr, 10))
+                );
+              }
+              if (monthStr) {
+                conditions.push(
+                  Sequelize.where(Sequelize.fn('extract', Sequelize.literal('month from "' + searchField + '"')), parseInt(monthStr, 10))
+                );
+              }
+              if (dayStr) {
+                conditions.push(
+                  Sequelize.where(Sequelize.fn('extract', Sequelize.literal('day from "' + searchField + '"')), parseInt(dayStr, 10))
+                );
+              }
+
+              return conditions.length > 0 ? { [Op.and]: conditions } : null;
+            }
+
+            return null;
+          };
+
+          const dateSearchCondition = parseDateSearch(search);
+          if (!dateSearchCondition) {
+            return res.status(400).json({ error: "Invalid Date Search", message: `Cannot parse date search: ${search}` });
+          }
+          options.where[searchField] = dateSearchCondition;
+        }
+      }
+
+      // Additional filters
+      if (filters.location && filters.location !== 'All') {
+        options.where.adminlocation = filters.location;
+      }
+      if (filters.branch && filters.branch !== 'All') {
+        options.where.adminbranch = filters.branch;
+      }
+      if (filters.courseType && filters.courseType !== 'All') {
+        options.where.courseType = filters.courseType;
+      }
+
+      console.log("Completed Students WHERE clause:", JSON.stringify(options.where, null, 2));
+
+      // Fetch data
+      const { count, rows: completedStudents } = await StudentRegistration.findAndCountAll(options);
+
+      res.status(200).json({
+        totalStudents: count,
+        totalPages: Math.ceil(count / limitNum),
+        currentPage: pageNum,
+        completedStudents,
+        message: "Students with completed status and no pending fees"
+      });
+    } catch (error) {
+      console.error("Error fetching completed students:", error);
+      res.status(500).json({ error: "Internal Server Error", details: error.message });
+    }
+  }
   // Ensure your route uses studentId
 }
 
