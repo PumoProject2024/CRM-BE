@@ -11,8 +11,9 @@ const { getAllEmployeeDetails } = require("../controllers/employeeController");
 const { getAllInvoices } = require('../controllers/invoiceController');
 const studentCourseController = require('../controllers/studentCourseController');
 const attendanceController = require('../controllers/attendanceController');
-const { createPlacement } = require('../controllers/placementcontrollers');
+const { createPlacement, getPlacements, getUpcomingPlacements } = require('../controllers/placementcontrollers');
 const { upload, uploadFile } = require('../controllers/uploadController');
+const { getStudentPlacements, createStudentPlacement, getStudentPlacementsByStudentId } = require('../controllers/studentPlacementController');
 
 
 
@@ -35,7 +36,6 @@ router.post('/password/forgot', passwordController.requestPasswordReset);
 router.get('/password/reset/:emp_id/:token', passwordController.verifyResetToken);
 router.post('/password/reset', passwordController.resetPassword);
 router.post("/reset-default-password", authMiddleware, passwordController.resetToDefaultPassword);
-
 
 router.post('/create-course', authMiddleware,createCourse);
 router.get('/course', getAllCourses);
@@ -77,6 +77,11 @@ router.delete('/attendance/:id/day/:day',authMiddleware, attendanceController.de
 
 router.get('/placement-ready',authMiddleware,studentCourseController.getPlacementEligibleStudents );
 router.post('/placement-details',authMiddleware,createPlacement);
+router.get('/company-details',authMiddleware,getPlacements);
+router.get('/placements/upcoming', getUpcomingPlacements);
+
+router.post('/studentplacement',authMiddleware,createStudentPlacement);
+router.get('/studentplacement/:studentId',authMiddleware, getStudentPlacementsByStudentId);
 
 router.post('/logined',StudentRegistrationController.studentLogin);
 router.put('/studentpro/:studentId', StudentRegistrationController.updateStudentProfile);
@@ -84,9 +89,7 @@ router.get('/student/:studentId', StudentRegistrationController.getStudentById);
 router.post('/upload-profile', upload.single('profilePic'), uploadFile);
 router.post('/upload-resume', upload.single('resume'), uploadFile);
 
-
-
-
-
 module.exports = router;
+
+
 

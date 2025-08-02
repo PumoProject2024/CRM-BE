@@ -2,55 +2,95 @@ const { DataTypes } = require('sequelize');
 const sequelize = require('../config/database');
 
 const Placement = sequelize.define('Placement', {
-    id: {
-        type: DataTypes.INTEGER,
-        autoIncrement: true,
-        primaryKey: true,
-    },
-    studentid: {
-        type: DataTypes.STRING,
-        allowNull: false,
-    },
-    companyname: {
-        type: DataTypes.STRING,
-        allowNull: false,
-    },
-    companylocation: {
-        type: DataTypes.STRING,
-        allowNull: false,
-    },
-    package: {
-        type: DataTypes.STRING,
-        allowNull: false,
-    },
-    result: {
-        type: DataTypes.ENUM('Selected', 'Not Selected', 'Pending'),
-        allowNull: false,
-    },
-    companyfeeback: {
-        type: DataTypes.TEXT,
-        allowNull: true,
-    },
-    placementofficerfeedback: {
-        type: DataTypes.TEXT,
-        allowNull: true,
-    },
-    companies: {
-        type: DataTypes.INTEGER,
-        allowNull: false,
-        defaultValue: 1
-    },
-    dateofplacement: {
-        type: DataTypes.DATEONLY, // YYYY-MM-DD format
-        allowNull: false,
-    },
-    modified_by: {
-        type: DataTypes.STRING,
-        allowNull: true,
-    }
+  id: {
+    type: DataTypes.INTEGER,
+    autoIncrement: true,
+    primaryKey: true,
+  },
+
+  placementOfficerName: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
+
+  companyName: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
+
+  companyLocation: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
+
+  contactPerson: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
+
+  contactPersonNumber: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
+
+  recruitmentRole: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
+
+  technology: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
+
+  qualification: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
+
+  passedOutYear: {
+    type: DataTypes.STRING, // or INTEGER if you're strictly storing year
+    allowNull: false,
+  },
+
+  experienceRequired: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
+
+  salary: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
+
+  bond: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
+
+  action: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+
+  dateOfPlacement: {
+    type: DataTypes.DATEONLY,
+    allowNull: false,
+  },
+
+  directApply: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+
+  additionalRemarks: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+  },
+
 }, {
-    tableName: 'Placements',
-    timestamps: true
+  tableName: 'Placements',
+  timestamps: true
 });
 
 module.exports = Placement;

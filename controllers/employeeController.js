@@ -423,8 +423,6 @@ exports.getTrainerEmployees = async (req, res) => {
   }
 };
 
-
-
 // In your routes file
 
 // In your controller file
@@ -457,7 +455,6 @@ exports.updateEmployeeProfile = async (req, res) => {
 };
 
 // Add this function to your existing controller file
-
 exports.changePassword = async (req, res) => {
   try {
     const { emp_id, oldPassword, newPassword } = req.body;

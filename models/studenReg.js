@@ -276,7 +276,8 @@ resumePath: {
 
 }, {
   tableName: 'student_registrations',
-  timestamps: true
+  timestamps: true,
+  
 });
 
 

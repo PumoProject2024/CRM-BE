@@ -36,8 +36,7 @@ const studentCourseController = {
     }
   },
   // READ - Get all student course records with pagination and filtering
-
- getAll: async (req, res) => {
+  getAll: async (req, res) => {
     try {
       const {
         courseType,
@@ -119,7 +118,7 @@ const studentCourseController = {
       if (courseName) whereClause.courseName = courseName;
       if (batch) whereClause.batch = batch;
       if (learningMode) whereClause.learningMode = learningMode;
-      
+
       // If progressStatus filter is provided, combine it with the exclusion
       if (progressStatus) {
         // Make sure the requested status is not in the excluded list
@@ -461,13 +460,22 @@ const studentCourseController = {
   getPlacementEligibleStudents: async (req, res) => {
     try {
       const {
+        // Multi-select filters from frontend
+        courseTypes,
+        courseNames,
+        branches,
+        companyLocations,
+        experiences,
+        // Single filters (keeping for backward compatibility)
         courseType,
         courseName,
         batch,
         learningMode,
         branch,
+        // Search parameters
         searchField,
         searchValue,
+        // Pagination
         page = 1,
         limit = 10,
         sortBy = 'id',
@@ -480,14 +488,60 @@ const studentCourseController = {
         ProgressStatus: 'Course Completed'
       };
 
-      // Optional filters
-      if (courseType) whereClause.courseType = courseType;
-      if (courseName) whereClause.courseName = courseName;
+      // Handle multi-select filters
+      if (courseTypes) {
+        const courseTypeArray = courseTypes.split(',').map(type => type.trim());
+        whereClause.courseType = { [Op.in]: courseTypeArray };
+      } else if (courseType) {
+        // Backward compatibility for single courseType
+        whereClause.courseType = courseType;
+      }
+
+      if (courseNames) {
+        const courseNameArray = courseNames.split(',').map(name => name.trim());
+        whereClause.courseName = { [Op.in]: courseNameArray };
+      } else if (courseName) {
+        // Backward compatibility for single courseName
+        whereClause.courseName = courseName;
+      }
+
+      if (branches) {
+        const branchArray = branches.split(',').map(branch => branch.trim());
+        whereClause.branch = { [Op.in]: branchArray };
+      } else if (branch) {
+        // Backward compatibility for single branch
+        whereClause.branch = branch;
+      }
+
+      // FIXED: Handle company locations filter for comma-separated values
+      if (companyLocations) {
+        const locationArray = companyLocations.split(',').map(location => location.trim());
+
+        if (locationArray.length > 0) {
+          // Always include students with No Constraint
+          const locationConditions = [
+            { desiredlocation: { [Op.iLike]: '%No Constraint%' } },
+            ...locationArray.map(location => ({
+              desiredlocation: { [Op.iLike]: `%${location}%` }
+            }))
+          ];
+
+          whereClause[Op.or] = locationConditions;
+        }
+      }
+
+
+      // Handle experience filter (assuming you have this field in your model)
+      if (experiences) {
+        const experienceArray = experiences.split(',').map(exp => exp.trim());
+        whereClause.experience = { [Op.in]: experienceArray };
+      }
+
+      // Single filters (keeping for backward compatibility)
       if (batch) whereClause.batch = batch;
       if (learningMode) whereClause.learningMode = learningMode;
-      if (branch) whereClause.branch = branch;
 
-      // Optional search
+      // Search functionality
       if (searchField && searchValue) {
         whereClause[searchField] = { [Op.iLike]: `%${searchValue}%` };
       }
@@ -501,6 +555,18 @@ const studentCourseController = {
       const allowedSortFields = ['id', 'courseType', 'courseName', 'batch', 'learningMode', 'createdAt', 'updatedAt'];
       const sortField = allowedSortFields.includes(sortBy) ? sortBy : 'id';
       const sortDirection = ['ASC', 'DESC'].includes(sortOrder.toUpperCase()) ? sortOrder.toUpperCase() : 'DESC';
+
+      // Debug logging
+      console.log('Applied whereClause:', JSON.stringify(whereClause, null, 2));
+      console.log('Received filters:', {
+        courseTypes,
+        courseNames,
+        branches,
+        companyLocations,
+        experiences,
+        searchField,
+        searchValue
+      });
 
       // Fetch records
       const { count, rows } = await StudentCourse.findAndCountAll({
@@ -525,6 +591,11 @@ const studentCourseController = {
           hasPrevPage: pageNumber > 1
         },
         filters: {
+          courseTypes,
+          courseNames,
+          branches,
+          companyLocations,
+          experiences,
           courseType,
           courseName,
           batch,
