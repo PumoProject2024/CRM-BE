@@ -69,6 +69,8 @@ router.get('/students-record',authMiddleware, studentCourseController.getAll);
 router.get('/placed-record',authMiddleware, studentCourseController.placed);
 router.put('/students-record/:id', studentCourseController.update);
 router.get("/trainers",employeeController.getTrainerEmployees);
+router.get("/placement-officer",employeeController.getPlacementOfficerNames);
+
 
 router.post('/attendance',authMiddleware, attendanceController.createAttendance);
 router.get('/attendance/:studentId', authMiddleware, attendanceController.getAttendanceByStudentId);

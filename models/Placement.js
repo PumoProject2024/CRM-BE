@@ -87,6 +87,15 @@ const Placement = sequelize.define('Placement', {
     type: DataTypes.TEXT,
     allowNull: true,
   },
+  requirementIdentifiedDate: {
+    type: DataTypes.DATEONLY,
+    allowNull: true,
+  },
+
+  directApplyLink: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
 
 }, {
   tableName: 'Placements',

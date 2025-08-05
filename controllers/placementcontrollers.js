@@ -1,46 +1,50 @@
 const Placement = require('../models/Placement');
 const { Op } = require('sequelize');
 
-
 exports.createPlacement = async (req, res) => {
   try {
-    const {
-      placementOfficerName,
-      companyName,
-      companyLocation,
-      contactPerson,
-      contactPersonNumber,
-      recruitmentRole,
-      technology,
-      qualification,
-      passedOutYear,
-      experienceRequired,
-      salary,
-      bond,
-      action,
-      dateOfPlacement,
-      directApply,
-      additionalRemarks
-    } = req.body;
+ const {
+  placementOfficerName,
+  companyName,
+  companyLocation,
+  contactPerson,
+  contactPersonNumber,
+  recruitmentRole,
+  technology,
+  qualification,
+  passedOutYear,
+  experienceRequired,
+  salary,
+  bond,
+  action,
+  dateOfPlacement,
+  directApply,
+  additionalRemarks,
+  requirementIdentifiedDate,
+  directApplyLink
+} = req.body;
 
-    const newPlacement = await Placement.create({
-      placementOfficerName,
-      companyName,
-      companyLocation,
-      contactPerson,
-      contactPersonNumber,
-      recruitmentRole,
-      technology,
-      qualification,
-      passedOutYear,
-      experienceRequired,
-      salary,
-      bond,
-      action,
-      dateOfPlacement,
-      directApply,
-      additionalRemarks
-    });
+   const newPlacement = await Placement.create({
+  placementOfficerName,
+  companyName,
+  companyLocation,
+  contactPerson,
+  contactPersonNumber,
+  recruitmentRole,
+  technology,
+  qualification,
+  passedOutYear,
+  experienceRequired,
+  salary,
+  bond,
+  action,
+  dateOfPlacement,
+  directApply,
+  additionalRemarks,
+  requirementIdentifiedDate,
+  directApplyLink
+});
+
 
     res.status(201).json({
       message: 'Placement record created successfully',

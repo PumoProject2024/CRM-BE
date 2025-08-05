@@ -422,6 +422,24 @@ exports.getTrainerEmployees = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+exports.getPlacementOfficerNames = async (req, res) => {
+  try {
+    const employees = await Employee.findAll({
+      where: Sequelize.where(
+        Sequelize.cast(Sequelize.col("role"), "TEXT"),
+        {
+          [Op.iLike]: "placement officer"
+        }
+      ),
+      attributes: ["emp_name"]
+    });
+
+    res.status(200).json(employees.map(emp => emp.emp_name));
+  } catch (error) {
+    console.error("Error fetching Placement Officer names:", error);
+    res.status(500).json({ error: error.message });
+  }
+};
 
 // In your routes file
 
