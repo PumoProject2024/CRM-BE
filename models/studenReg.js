@@ -10,9 +10,8 @@ const StudentRegistration = sequelize.define('StudentRegistration', {
   studentId: {
     type: DataTypes.STRING,
     allowNull: false,
-    unique: true 
+    unique: true
   },
-
   name: {
     type: DataTypes.STRING,
     allowNull: false,
@@ -44,9 +43,8 @@ const StudentRegistration = sequelize.define('StudentRegistration', {
   },
   address: {
     type: DataTypes.TEXT,
-    validate: {
-      notEmpty: { msg: "Address cannot be empty" }
-    }
+    allowNull: true,
+
   },
   educationLevel: {
     type: DataTypes.STRING,
@@ -66,10 +64,10 @@ const StudentRegistration = sequelize.define('StudentRegistration', {
   },
   studentStatus: {
     type: DataTypes.STRING,
-    allowNull: false,
+    allowNull: true,
     validate: {
       isIn: {
-        args: [['Student', 'Fresher','Internship', 'Working Experience', 'Working Experience 1-2', 'Working Experience 2-3', 'Working Experience 3-4', 'Working Experience 4-5',
+        args: [['Student', 'Fresher', 'Internship', 'Working Experience', 'Working Experience 1-2', 'Working Experience 2-3', 'Working Experience 3-4', 'Working Experience 4-5',
           'Working Experience 5-6', 'Working Experience 6-7', 'Working Experience 7-8', 'Working Experience 8-9', 'Working Experience 9-10', 'Working Experience >10'
         ]],
         msg: "Invalid student status"
@@ -78,7 +76,7 @@ const StudentRegistration = sequelize.define('StudentRegistration', {
   },
   dob: {
     type: DataTypes.DATEONLY,
-    allowNull: false,
+    allowNull: true,
     validate: {
       isDate: { msg: "Date of Birth must be a valid date" }
     }
@@ -96,15 +94,11 @@ const StudentRegistration = sequelize.define('StudentRegistration', {
   },
   batch: {
     type: DataTypes.STRING,
-    validate: {
-      isIn: {
-        args: [['9AM-11AM', '12PM-2PM', '3PM-5PM', '6PM-8PM']],
-        msg: "Invalid payment mode"
-      }
-    }
+    allowNull: true,
   },
   learningMode: {
-    type: DataTypes.STRING
+    type: DataTypes.STRING,
+    allowNull: true,
   },
   courseFees: {
     type: DataTypes.DECIMAL(10, 2),
@@ -114,7 +108,8 @@ const StudentRegistration = sequelize.define('StudentRegistration', {
     }
   },
   classType: {
-    type: DataTypes.STRING
+    type: DataTypes.STRING,
+    allowNull: true,
   },
   demoGivenBy: {
     type: DataTypes.STRING
@@ -266,18 +261,46 @@ const StudentRegistration = sequelize.define('StudentRegistration', {
     allowNull: true,
   },
   profilePicPath: {
-  type: DataTypes.STRING,
-  allowNull: true
-},
-resumePath: {
-  type: DataTypes.STRING,
-  allowNull: true
-}
-
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  resumePath: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  gender: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  tenthPassout: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  tenthPercentage: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  twelfthPassout: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  twelfthPercentage: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  cgpa: {
+    type: DataTypes.STRING,
+    allowNull: true
+  }
 }, {
   tableName: 'student_registrations',
   timestamps: true,
-  
+  indexes: [
+    {
+      unique: true,
+      fields: ['contactNo', 'course']
+    }
+  ]
 });
 
 

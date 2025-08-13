@@ -13,11 +13,20 @@ const studentCourseController = require('../controllers/studentCourseController'
 const attendanceController = require('../controllers/attendanceController');
 const { createPlacement, getPlacements, getUpcomingPlacements } = require('../controllers/placementcontrollers');
 const { upload, uploadFile } = require('../controllers/uploadController');
+const bulkUploadController = require('../controllers/bulkUploadController');
+const syllabusController = require('../controllers/syllabusController');
 const { getStudentPlacements, createStudentPlacement, getStudentPlacementsByStudentId } = require('../controllers/studentPlacementController');
+const { downloadResume, downloadBulkResumes, downloadAllResumes } = require('../controllers/resumeDownloadController');
 
 
 
 const router = express.Router();
+
+
+router.post('/upload-syllabus', upload.single('file'), syllabusController.uploadSyllabusExcel);
+router.get('/modules/:courseType/:courseName', syllabusController.getModules);
+
+router.post('/bulkupload', authMiddleware,upload.single('excelFile'), bulkUploadController.uploadExcel);
 
 // POST route to create a new student registration
 router.get('/location', getAllLocations);
@@ -90,6 +99,14 @@ router.put('/studentpro/:studentId', StudentRegistrationController.updateStudent
 router.get('/student/:studentId', StudentRegistrationController.getStudentById);
 router.post('/upload-profile', upload.single('profilePic'), uploadFile);
 router.post('/upload-resume', upload.single('resume'), uploadFile);
+
+router.get('/download/:studentId', downloadResume);
+router.get('/resumes/download-bulk', downloadBulkResumes);
+router.get('/resumes/downloadall',downloadAllResumes);
+
+
+
+
 
 module.exports = router;
 

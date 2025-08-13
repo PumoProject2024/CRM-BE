@@ -915,7 +915,13 @@ class StudentRegistrationController {
           'adminlocation',
           'adminbranch',
           'profilePicPath',
-          'staffAssigned'
+          'staffAssigned',
+          'gender',
+          'tenthPassout',
+          'tenthPercentage',
+          'twelfthPassout',
+          'twelfthPercentage',
+          'cgpa'
         ]
       });
 
@@ -997,7 +1003,13 @@ class StudentRegistrationController {
         studentStatus,
         dob,
         studentRequirement,
-        desiredlocation // ✅ NEW FIELD
+        desiredlocation, // ✅ NEW FIELD
+        gender,
+        tenthPassout,
+        tenthPercentage,
+        twelfthPassout,
+        twelfthPercentage,
+        cgpa
       } = req.body;
 
       // Update StudentRegistration
@@ -1013,7 +1025,13 @@ class StudentRegistrationController {
         educationCourse,
         studentStatus,
         dob,
-        studentRequirement
+        studentRequirement,
+        gender,
+        tenthPassout,
+        tenthPercentage,
+        twelfthPassout,
+        twelfthPercentage,
+        cgpa
       }, {
         where: { studentId }
       });
