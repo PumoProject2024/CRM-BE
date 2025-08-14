@@ -961,7 +961,9 @@ class StudentRegistrationController {
           'twelfthPassout',
           'twelfthPercentage',
           'collegePassout',
-          'cgpa'
+          'cgpa',
+          'skillSet',
+          'knownSkill'
         ]
       });
 
@@ -986,83 +988,99 @@ class StudentRegistrationController {
       });
     }
   }
+// Updated updateStudentProfile function
+static async updateStudentProfile(req, res) {
+  try {
+    const { studentId } = req.params;
 
-  static async updateStudentProfile(req, res) {
-    try {
-      const { studentId } = req.params;
+    const {
+      name,
+      email_Id,
+      contactNo,
+      ParentNo,
+      address,
+      educationLevel,
+      department,
+      clg_name,
+      educationCourse,
+      studentStatus,
+      dob,
+      studentRequirement,
+      desiredlocation,
+      gender,
+      tenthPassout,
+      tenthPercentage,
+      twelfthPassout,
+      twelfthPercentage,
+      collegePassout,
+      cgpa,
+      knownSkill,
+      skillSet
+    } = req.body;
 
-      const {
-        name,
-        email_Id,
-        contactNo,
-        ParentNo,
-        address,
-        educationLevel,
-        department,
-        clg_name,
-        educationCourse,
-        studentStatus,
-        dob,
-        studentRequirement,
-        desiredlocation, // ✅ NEW FIELD
-        gender,
-        tenthPassout,
-        tenthPercentage,
-        twelfthPassout,
-        twelfthPercentage,
-        collegePassout,
-        cgpa
-      } = req.body;
+    console.log('Received skillSet:', skillSet);
+    console.log('Received knownSkill:', knownSkill);
 
-      // Update StudentRegistration
-      const [updatedRows] = await StudentRegistration.update({
-        name,
-        email_Id,
-        contactNo,
-        ParentNo,
-        address,
-        educationLevel,
-        department,
-        clg_name,
-        educationCourse,
-        studentStatus,
-        dob,
-        studentRequirement,
-      }, {
-        where: { studentId }
-      });
+    // Update StudentRegistration
+    const [updatedRows] = await StudentRegistration.update({
+      name,
+      email_Id,
+      contactNo,
+      ParentNo,
+      address,
+      educationLevel,
+      department,
+      clg_name,
+      educationCourse,
+      studentStatus,
+      dob,
+      studentRequirement,
+    }, {
+      where: { studentId }
+    });
 
-      // Update StudentCourse
-      await StudentCourse.update({
-        studentName: name,
-        email_Id,
-        studentContactNumber: contactNo,
-        educationQualification: educationLevel,
-        clgName: clg_name,
-        gender,
-        tenthPassout,
-        tenthPercentage,
-        twelfthPassout,
-        twelfthPercentage,
-        collegePassout,
-        cgpa,
-        desiredlocation: Array.isArray(desiredlocation) ? desiredlocation.join(",") : desiredlocation
-      }, {
-        where: { studentId }
-      });
+    // Update StudentCourse with proper array handling
+    await StudentCourse.update({
+      studentName: name,
+      email_Id,
+      studentContactNumber: contactNo,
+      educationQualification: educationLevel,
+      clgName: clg_name,
+      gender,
+      tenthPassout,
+      tenthPercentage,
+      twelfthPassout,
+      twelfthPercentage,
+      collegePassout,
+      cgpa,
+      desiredlocation: Array.isArray(desiredlocation) ? desiredlocation.join(",") : (desiredlocation || ""),
+      knownSkill: Array.isArray(knownSkill) ? knownSkill.join(",") : (knownSkill || ""),
+      skillSet: Array.isArray(skillSet) ? skillSet.join(",") : (skillSet || "")
+    }, {
+      where: { studentId }
+    });
 
-      if (updatedRows === 0) {
-        return res.status(404).json({ success: false, message: 'Student not found.' });
-      }
+    console.log('Updated skillSet in DB:', Array.isArray(skillSet) ? skillSet.join(",") : (skillSet || ""));
+    console.log('Updated knownSkill in DB:', Array.isArray(knownSkill) ? knownSkill.join(",") : (knownSkill || ""));
 
-      return res.status(200).json({ success: true, message: 'Student profile updated successfully.' });
-
-    } catch (error) {
-      console.error('Update error:', error);
-      return res.status(500).json({ success: false, message: 'Internal server error', error: error.message });
+    if (updatedRows === 0) {
+      return res.status(404).json({ success: false, message: 'Student not found.' });
     }
-  }
 
+    return res.status(200).json({ 
+      success: true, 
+      message: 'Student profile updated successfully.',
+      updatedFields: {
+        skillSet: Array.isArray(skillSet) ? skillSet.join(",") : (skillSet || ""),
+        knownSkill: Array.isArray(knownSkill) ? knownSkill.join(",") : (knownSkill || "")
+      }
+    });
+
+  } catch (error) {
+    console.error('Update error:', error);
+    return res.status(500).json({ success: false, message: 'Internal server error', error: error.message });
+  }
+}
   static async getStudentById(req, res) {
     try {
       const { studentId } = req.params;
@@ -1136,7 +1154,9 @@ class StudentRegistrationController {
           'twelfthPassout',
           'twelfthPercentage',
           'collegePassout',
-          'cgpa'
+          'cgpa',
+          'skillSet',
+          'knownSkill'
         ]
       });
 

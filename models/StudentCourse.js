@@ -214,6 +214,14 @@ const StudentCourse = sequelize.define('StudentCourse', {
   cgpa: {
     type: DataTypes.STRING,
     allowNull: true
+  },
+  skillSet:{
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+   knownSkill:{
+    type: DataTypes.STRING,
+    allowNull: true
   }
   }, {
   tableName: 'student_courses',
