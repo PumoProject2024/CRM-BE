@@ -186,8 +186,35 @@ const StudentCourse = sequelize.define('StudentCourse', {
   courseStartDate: { type: DataTypes.DATEONLY, allowNull: true },
   courseEndDate: { type: DataTypes.DATEONLY, allowNull: true },
   email_Id: {  type: DataTypes.STRING, allowNull: true},
-  desiredlocation:{ type: DataTypes.STRING, allowNull: true}
-
+  desiredlocation:{ type: DataTypes.STRING, allowNull: true},
+   gender: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  tenthPassout: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  tenthPercentage: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  twelfthPassout: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  twelfthPercentage: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  collegePassout: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  cgpa: {
+    type: DataTypes.STRING,
+    allowNull: true
+  }
   }, {
   tableName: 'student_courses',
   timestamps: true

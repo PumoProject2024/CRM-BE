@@ -916,12 +916,6 @@ class StudentRegistrationController {
           'adminbranch',
           'profilePicPath',
           'staffAssigned',
-          'gender',
-          'tenthPassout',
-          'tenthPercentage',
-          'twelfthPassout',
-          'twelfthPercentage',
-          'cgpa'
         ]
       });
 
@@ -960,7 +954,14 @@ class StudentRegistrationController {
           'project1Status',
           'project2Status',
           'desiredlocation',
-          'project3Status'
+          'project3Status',
+          'gender',
+          'tenthPassout',
+          'tenthPercentage',
+          'twelfthPassout',
+          'twelfthPercentage',
+          'collegePassout',
+          'cgpa'
         ]
       });
 
@@ -1009,6 +1010,7 @@ class StudentRegistrationController {
         tenthPercentage,
         twelfthPassout,
         twelfthPercentage,
+        collegePassout,
         cgpa
       } = req.body;
 
@@ -1026,12 +1028,6 @@ class StudentRegistrationController {
         studentStatus,
         dob,
         studentRequirement,
-        gender,
-        tenthPassout,
-        tenthPercentage,
-        twelfthPassout,
-        twelfthPercentage,
-        cgpa
       }, {
         where: { studentId }
       });
@@ -1043,6 +1039,13 @@ class StudentRegistrationController {
         studentContactNumber: contactNo,
         educationQualification: educationLevel,
         clgName: clg_name,
+        gender,
+        tenthPassout,
+        tenthPercentage,
+        twelfthPassout,
+        twelfthPercentage,
+        collegePassout,
+        cgpa,
         desiredlocation: Array.isArray(desiredlocation) ? desiredlocation.join(",") : desiredlocation
       }, {
         where: { studentId }
@@ -1093,7 +1096,8 @@ class StudentRegistrationController {
           'adminlocation',
           'adminbranch',
           'profilePicPath',
-          'staffAssigned'
+          'staffAssigned',
+
         ]
       });
 
@@ -1125,7 +1129,14 @@ class StudentRegistrationController {
           'project1Status',
           'project2Status',
           'project3Status',
-          'desiredlocation'
+          'desiredlocation',
+          'gender',
+          'tenthPassout',
+          'tenthPercentage',
+          'twelfthPassout',
+          'twelfthPercentage',
+          'collegePassout',
+          'cgpa'
         ]
       });
 

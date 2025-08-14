@@ -17,6 +17,7 @@ const bulkUploadController = require('../controllers/bulkUploadController');
 const syllabusController = require('../controllers/syllabusController');
 const { getStudentPlacements, createStudentPlacement, getStudentPlacementsByStudentId } = require('../controllers/studentPlacementController');
 const { downloadResume, downloadBulkResumes, downloadAllResumes } = require('../controllers/resumeDownloadController');
+const technologyController = require('../controllers/technologyController');
 
 
 
@@ -105,6 +106,8 @@ router.get('/resumes/download-bulk', downloadBulkResumes);
 router.get('/resumes/downloadall',downloadAllResumes);
 
 
+router.post('/tech', technologyController.createTechnology);
+router.get('/alltech', technologyController.getTechnologies);
 
 
 

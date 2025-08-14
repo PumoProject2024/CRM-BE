@@ -268,30 +268,7 @@ const StudentRegistration = sequelize.define('StudentRegistration', {
     type: DataTypes.STRING,
     allowNull: true
   },
-  gender: {
-    type: DataTypes.STRING,
-    allowNull: true
-  },
-  tenthPassout: {
-    type: DataTypes.STRING,
-    allowNull: true
-  },
-  tenthPercentage: {
-    type: DataTypes.STRING,
-    allowNull: true
-  },
-  twelfthPassout: {
-    type: DataTypes.STRING,
-    allowNull: true
-  },
-  twelfthPercentage: {
-    type: DataTypes.STRING,
-    allowNull: true
-  },
-  cgpa: {
-    type: DataTypes.STRING,
-    allowNull: true
-  }
+ 
 }, {
   tableName: 'student_registrations',
   timestamps: true,
