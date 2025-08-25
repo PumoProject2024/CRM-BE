@@ -215,6 +215,10 @@ const StudentCourse = sequelize.define('StudentCourse', {
     type: DataTypes.STRING,
     allowNull: true
   },
+     Department: {
+        type: DataTypes.STRING,
+        allowNull: true,
+    },
   skillSet:{
     type: DataTypes.STRING,
     allowNull: true

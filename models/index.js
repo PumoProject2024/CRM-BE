@@ -3,7 +3,7 @@ const Invoice = require("./invoice");
 const Employee = require("./Employee");
 const StudentCourse = require("./StudentCourse");
 const Attendance = require("./Attendance");
-
+const MappedStudent = require("./Mappedstudents"); // Add this import
 
 // Existing associations
 StudentRegistration.hasMany(Invoice, { foreignKey: "studentId" });
@@ -37,5 +37,17 @@ Attendance.belongsTo(StudentRegistration, {
   as: "studentRegistration"
 });
 
+MappedStudent.belongsTo(StudentCourse, {
+  foreignKey: "studentId",
+  targetKey: "studentId",
+  as: "studentCourse"
+});
 
-module.exports = { StudentRegistration, Invoice, Employee, StudentCourse,  Attendance  };
+StudentCourse.hasMany(MappedStudent, {
+  foreignKey: "studentId",
+  sourceKey: "studentId", 
+  as: "mappedStudents"
+});
+
+
+module.exports = { StudentRegistration, Invoice, Employee, StudentCourse,  Attendance ,MappedStudent };

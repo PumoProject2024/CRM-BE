@@ -7,6 +7,10 @@ const Technology = sequelize.define('Technology', {
         primaryKey: true,
         autoIncrement: true
     },
+    Department: {
+        type: DataTypes.STRING,
+        allowNull: true,
+    },
     skillSet: {
         type: DataTypes.STRING,
         allowNull: false,

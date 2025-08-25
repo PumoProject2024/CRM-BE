@@ -962,6 +962,7 @@ class StudentRegistrationController {
           'twelfthPercentage',
           'collegePassout',
           'cgpa',
+          'Department',
           'skillSet',
           'knownSkill'
         ]
@@ -1014,6 +1015,7 @@ static async updateStudentProfile(req, res) {
       twelfthPercentage,
       collegePassout,
       cgpa,
+      Department,
       knownSkill,
       skillSet
     } = req.body;
@@ -1055,7 +1057,8 @@ static async updateStudentProfile(req, res) {
       cgpa,
       desiredlocation: Array.isArray(desiredlocation) ? desiredlocation.join(",") : (desiredlocation || ""),
       knownSkill: Array.isArray(knownSkill) ? knownSkill.join(",") : (knownSkill || ""),
-      skillSet: Array.isArray(skillSet) ? skillSet.join(",") : (skillSet || "")
+      skillSet: Array.isArray(skillSet) ? skillSet.join(",") : (skillSet || ""),
+      Department
     }, {
       where: { studentId }
     });
@@ -1155,6 +1158,7 @@ static async updateStudentProfile(req, res) {
           'twelfthPercentage',
           'collegePassout',
           'cgpa',
+          'Department',
           'skillSet',
           'knownSkill'
         ]

@@ -96,6 +96,26 @@ const Placement = sequelize.define('Placement', {
     type: DataTypes.STRING,
     allowNull: true,
   },
+  Department: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  skillSet: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  skillKnown: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  email:{
+   type: DataTypes.STRING,
+    allowNull: true,
+  },
+  status:{
+      type: DataTypes.STRING,
+    allowNull: true,
+  }
 
 }, {
   tableName: 'Placements',

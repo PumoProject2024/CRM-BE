@@ -3,21 +3,23 @@ const StudentRegistrationController = require('../controllers/studentCon');
 const employeeController = require("../controllers/employeeController");
 const authMiddleware = require("../middleware/authMiddleware");
 const { createInvoice, getInvoices } = require('../controllers/invoiceController');
-const { getAllCourses,createCourse,updateCourse,deleteCourse, getCourseByNameAndType,  } = require('../controllers/courseController');
-const { getAllLocations,createLocationBranch } = require('../controllers/locationController');
+const { getAllCourses, createCourse, updateCourse, deleteCourse, getCourseByNameAndType, } = require('../controllers/courseController');
+const { getAllLocations, createLocationBranch } = require('../controllers/locationController');
 const passwordController = require("../controllers/passwordController");
 const studentController = require("../controllers/studentController");
 const { getAllEmployeeDetails } = require("../controllers/employeeController");
 const { getAllInvoices } = require('../controllers/invoiceController');
 const studentCourseController = require('../controllers/studentCourseController');
 const attendanceController = require('../controllers/attendanceController');
-const { createPlacement, getPlacements, getUpcomingPlacements } = require('../controllers/placementcontrollers');
+const { createPlacement, getPlacements, getUpcomingPlacements, getPastPlacements, getUpcomingPlacementsdrive, updatePlacement } = require('../controllers/placementcontrollers');
 const { upload, uploadFile } = require('../controllers/uploadController');
 const bulkUploadController = require('../controllers/bulkUploadController');
 const syllabusController = require('../controllers/syllabusController');
-const { getStudentPlacements, createStudentPlacement, getStudentPlacementsByStudentId } = require('../controllers/studentPlacementController');
+const { createStudentPlacement, getStudentPlacementsByStudentId } = require('../controllers/studentPlacementController');
 const { downloadResume, downloadBulkResumes, downloadAllResumes } = require('../controllers/resumeDownloadController');
 const technologyController = require('../controllers/technologyController');
+const placementController = require('../controllers/placementController');
+const mappedStudentController = require("../controllers/mappedStudentController");
 
 
 
@@ -27,7 +29,7 @@ const router = express.Router();
 router.post('/upload-syllabus', upload.single('file'), syllabusController.uploadSyllabusExcel);
 router.get('/modules/:courseType/:courseName', syllabusController.getModules);
 
-router.post('/bulkupload', authMiddleware,upload.single('excelFile'), bulkUploadController.uploadExcel);
+router.post('/bulkupload', authMiddleware, upload.single('excelFile'), bulkUploadController.uploadExcel);
 
 // POST route to create a new student registration
 router.get('/location', getAllLocations);
@@ -35,10 +37,10 @@ router.post('/loc', createLocationBranch);
 
 
 router.post("/student", studentController.createStudent);
-router.get("/students", authMiddleware,studentController.getAllStudents);
+router.get("/students", authMiddleware, studentController.getAllStudents);
 router.put('/students/:id', authMiddleware, studentController.updateStudent);
 router.get("/students/:contactNo", studentController.getStudentByContactNo);
-router.get('/bde-employees',employeeController.getBDEEmployees);
+router.get('/bde-employees', employeeController.getBDEEmployees);
 
 router.get('/pending-details', authMiddleware, StudentRegistrationController.getPendingDetails);
 
@@ -47,55 +49,57 @@ router.get('/password/reset/:emp_id/:token', passwordController.verifyResetToken
 router.post('/password/reset', passwordController.resetPassword);
 router.post("/reset-default-password", authMiddleware, passwordController.resetToDefaultPassword);
 
-router.post('/create-course', authMiddleware,createCourse);
+router.post('/create-course', authMiddleware, createCourse);
 router.get('/course', getAllCourses);
-router.put('/courses/:id',updateCourse);
-router.delete('/courses/:id',deleteCourse);
+router.put('/courses/:id', updateCourse);
+router.delete('/courses/:id', deleteCourse);
 router.get('/courses/:courseName/:courseType', getCourseByNameAndType);
 
-router.post('/registrations',authMiddleware ,StudentRegistrationController.createStudentRegistration);
-router.post('/invoices', authMiddleware,createInvoice);
-router.get('/invoices',getInvoices);
-router.get('/all-invoices',authMiddleware,getAllInvoices);
+router.post('/registrations', authMiddleware, StudentRegistrationController.createStudentRegistration);
+router.post('/invoices', authMiddleware, createInvoice);
+router.get('/invoices', getInvoices);
+router.get('/all-invoices', authMiddleware, getAllInvoices);
 
 
 // GET route to fetch all student registrations
-router.get('/allregistrations',authMiddleware, StudentRegistrationController.getAllStudentRegistrations);
-router.get('/completedCourse',authMiddleware, StudentRegistrationController.getCompletedStudentsWithNoPendingFees);
-router.put('/registrations/:studentId', authMiddleware,StudentRegistrationController.updateStudentRegistration);
-router.put('/update/:id',authMiddleware,StudentRegistrationController.updateStudentRegistrationById);
+router.get('/allregistrations', authMiddleware, StudentRegistrationController.getAllStudentRegistrations);
+router.get('/completedCourse', authMiddleware, StudentRegistrationController.getCompletedStudentsWithNoPendingFees);
+router.put('/registrations/:studentId', authMiddleware, StudentRegistrationController.updateStudentRegistration);
+router.put('/update/:id', authMiddleware, StudentRegistrationController.updateStudentRegistrationById);
 
 router.post("/register", employeeController.createEmployee); // Allow first registration without auth
 router.post("/login", employeeController.loginEmployee); // No middleware here
 router.get("/regdetail", authMiddleware, employeeController.getEmployees);
-router.get("/all-employees", authMiddleware,getAllEmployeeDetails);
+router.get("/all-employees", authMiddleware, getAllEmployeeDetails);
 router.put('/regdetail/update', authMiddleware, employeeController.updateEmployeeProfile);
 router.post('/changepassword', authMiddleware, employeeController.changePassword);
 router.put("/employees/:emp_id", employeeController.updateEmployeeById);
 router.delete("/employees/:emp_id", employeeController.deleteEmployeeById);
 
 router.post('/student-record', studentCourseController.create);
-router.get('/students-record',authMiddleware, studentCourseController.getAll);
-router.get('/placed-record',authMiddleware, studentCourseController.placed);
+router.get('/students-record', authMiddleware, studentCourseController.getAll);
+router.get('/placed-record', authMiddleware, studentCourseController.placed);
 router.put('/students-record/:id', studentCourseController.update);
-router.get("/trainers",employeeController.getTrainerEmployees);
-router.get("/placement-officer",employeeController.getPlacementOfficerNames);
+router.get("/trainers", employeeController.getTrainerEmployees);
+router.get("/placement-officer", employeeController.getPlacementOfficerNames);
 
 
-router.post('/attendance',authMiddleware, attendanceController.createAttendance);
+router.post('/attendance', authMiddleware, attendanceController.createAttendance);
 router.get('/attendance/:studentId', authMiddleware, attendanceController.getAttendanceByStudentId);
-router.put('/attendance/:id',authMiddleware, attendanceController.updateAttendance);
-router.delete('/attendance/:id/day/:day',authMiddleware, attendanceController.deleteAttendanceDay);
+router.put('/attendance/:id', authMiddleware, attendanceController.updateAttendance);
+router.delete('/attendance/:id/day/:day', authMiddleware, attendanceController.deleteAttendanceDay);
 
-router.get('/placement-ready',authMiddleware,studentCourseController.getPlacementEligibleStudents );
-router.post('/placement-details',authMiddleware,createPlacement);
-router.get('/company-details',authMiddleware,getPlacements);
-router.get('/placements/upcoming', getUpcomingPlacements);
+router.get('/placement-ready', authMiddleware, studentCourseController.getPlacementEligibleStudents);
+router.post('/placement-details', authMiddleware, createPlacement);
+router.put('/update/placements/:id',authMiddleware,updatePlacement);
+router.get('/company-details', authMiddleware, getUpcomingPlacements);
+router.get("/placements/past", authMiddleware, getPastPlacements);
+router.get('/placements/upcoming', getUpcomingPlacementsdrive);
 
-router.post('/studentplacement',authMiddleware,createStudentPlacement);
-router.get('/studentplacement/:studentId',authMiddleware, getStudentPlacementsByStudentId);
+router.post('/studentplacement', authMiddleware, createStudentPlacement);
+router.get('/studentplacement/:studentId', authMiddleware, getStudentPlacementsByStudentId);
 
-router.post('/logined',StudentRegistrationController.studentLogin);
+router.post('/logined', StudentRegistrationController.studentLogin);
 router.put('/studentpro/:studentId', StudentRegistrationController.updateStudentProfile);
 router.get('/student/:studentId', StudentRegistrationController.getStudentById);
 router.post('/upload-profile', upload.single('profilePic'), uploadFile);
@@ -103,12 +107,16 @@ router.post('/upload-resume', upload.single('resume'), uploadFile);
 
 router.get('/download/:studentId', downloadResume);
 router.get('/resumes/download-bulk', downloadBulkResumes);
-router.get('/resumes/downloadall',downloadAllResumes);
+router.get('/resumes/downloadall', downloadAllResumes);
 
 
 router.post('/tech', technologyController.createTechnology);
 router.get('/alltech', technologyController.getTechnologies);
 
+router.get('/placements/:placementId/matching-students', placementController.getMatchingStudents);
+
+router.post("/map", mappedStudentController.createMappedStudent);
+router.get("/placement/:companyId", mappedStudentController.getMappedStudentsByCompanyId);
 
 
 module.exports = router;
