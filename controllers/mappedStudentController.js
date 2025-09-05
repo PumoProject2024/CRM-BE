@@ -1,5 +1,6 @@
 const MappedStudent = require('../models/Mappedstudents');
 const StudentCourse = require('../models/StudentCourse');
+const Placement = require('../models/Placement');
 const { Op } = require('sequelize');
 
 const mappedStudentController = {
@@ -118,7 +119,7 @@ const mappedStudentController = {
       const enrichedData = mappedStudents.map(mappedStudent => {
         const studentData = mappedStudent.toJSON();
         const studentInfo = studentMap[studentData.studentId] || {};
-        
+
         return {
           ...studentData,
           studentName: studentInfo.studentName || null,
@@ -128,12 +129,11 @@ const mappedStudentController = {
 
       res.status(200).json({
         success: true,
-        message: `Found ${mappedStudents.length} mapped student(s) for company ID: ${companyId}`,
         count: mappedStudents.length,
         data: enrichedData
       });
 
-    } catch (error) {
+      } catch (error) {
       console.error('Error fetching mapped students by company ID:', error);
       res.status(500).json({
         success: false,
@@ -142,8 +142,6 @@ const mappedStudentController = {
       });
     }
   },
-
-
 
   // GET - Get all mapped students (bonus method)
   getAllMappedStudents: async (req, res) => {
@@ -197,6 +195,206 @@ const mappedStudentController = {
       res.status(500).json({
         success: false,
         message: 'Internal server error',
+        error: error.message
+      });
+    }
+  },
+
+  updateInterviewAttendance: async (req, res) => {
+    try {
+      const { companyId } = req.params;
+      const { studentId, attended, feedback } = req.body;
+
+      if (!studentId || attended === undefined || !feedback) {
+        return res.status(400).json({
+          success: false,
+          message: 'Student ID, attendance status, and feedback are required'
+        });
+      }
+
+      const mapping = await MappedStudent.findOne({
+        where: {
+          studentId: studentId,
+          companyId: companyId,
+          isAccepted: true // Only for accepted offers
+        }
+      });
+
+      if (!mapping) {
+        return res.status(404).json({
+          success: false,
+          message: 'Accepted offer not found for this student and company'
+        });
+      }
+
+      // Check if interview date is today
+      const today = new Date().toISOString().split('T')[0];
+      const interviewDate = new Date(mapping.interviewDate).toISOString().split('T')[0];
+
+      if (today < interviewDate) {
+        return res.status(400).json({
+          success: false,
+          message: 'Attendance can only be marked on or after the interview date'
+        });
+      }
+
+      const updateData = {
+        attended: attended,
+        feedback: feedback.trim(),
+        attendanceUpdatedAt: new Date()
+      };
+
+      await mapping.update(updateData);
+
+      res.json({
+        success: true,
+        message: 'Interview attendance updated successfully',
+        data: mapping
+      });
+
+    } catch (error) {
+      console.error('Error updating interview attendance:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to update interview attendance',
+        error: error.message
+      });
+    }
+  },
+
+  // Get student notifications
+  getStudentNotifications: async (req, res) => {
+    try {
+      const { studentId } = req.params;
+
+      if (!studentId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Student ID is required'
+        });
+      }
+
+      // First, get the mapped companies
+      const mappedCompanies = await MappedStudent.findAll({
+        where: {
+          studentId: studentId
+        },
+        order: [['createdAt', 'DESC']]
+      });
+
+      if (mappedCompanies.length === 0) {
+        return res.status(200).json({
+          success: true,
+          message: 'No company notifications found',
+          notifications: []
+        });
+      }
+
+      // Get all unique company IDs
+      const companyIds = mappedCompanies.map(mapping => mapping.companyId);
+
+      // Fetch placement details for these companies
+      const placements = await Placement.findAll({
+        where: {
+          id: {
+            [Op.in]: companyIds
+          }
+        },
+        attributes: ['id', 'technology', 'salary', 'experienceRequired', 'qualification', 'recruitmentRole']
+      });
+
+      // Create a lookup map for placements
+      const placementMap = {};
+      placements.forEach(placement => {
+        placementMap[placement.id] = placement;
+      });
+
+      // Combine the data including attendance information
+      const notifications = mappedCompanies.map(mapping => {
+        const placement = placementMap[mapping.companyId];
+        return {
+          id: mapping.companyId,
+          companyName: mapping.companyName,
+          interviewDate: mapping.interviewDate,
+          isAccepted: mapping.isAccepted,
+          rejectReason: mapping.rejectReason,
+          attended: mapping.attended, // null, true, or false
+          feedback: mapping.feedback,
+          attendanceUpdatedAt: mapping.attendanceUpdatedAt,
+          mappingId: mapping.id,
+          technology: placement?.technology || 'Not specified',
+          salary: placement?.salary || 'Not specified',
+          experienceRequired: placement?.experienceRequired || 'Not specified',
+          qualification: placement?.qualification || 'Not specified',
+          recruitmentRole: placement?.recruitmentRole || 'Not specified'
+        };
+      });
+
+      res.json({
+        success: true,
+        notifications: notifications
+      });
+
+    } catch (error) {
+      console.error('Error fetching student notifications:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch notifications',
+        error: error.message
+      });
+    }
+  },
+
+  // Update student response
+  updateStudentResponse: async (req, res) => {
+    try {
+      const { companyId } = req.params;
+      const { studentId, isAccepted, rejectReason } = req.body;
+
+      if (!studentId || isAccepted === undefined) {
+        return res.status(400).json({
+          success: false,
+          message: 'Student ID and acceptance status are required'
+        });
+      }
+
+      const mapping = await MappedStudent.findOne({
+        where: {
+          studentId: studentId,
+          companyId: companyId
+        }
+      });
+
+      if (!mapping) {
+        return res.status(404).json({
+          success: false,
+          message: 'Student-company mapping not found'
+        });
+      }
+
+      const updateData = {
+        isAccepted: isAccepted
+      };
+
+      if (!isAccepted && rejectReason) {
+        updateData.rejectReason = rejectReason;
+      } else if (isAccepted) {
+        updateData.rejectReason = null;
+      }
+
+      await mapping.update(updateData);
+
+      res.json({
+        success: true,
+        message: isAccepted ? 'Offer accepted successfully' : 'Offer rejected successfully',
+        data: mapping
+      });
+
+    } catch (error) {
+      console.error('Error updating student response:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to update response',
         error: error.message
       });
     }

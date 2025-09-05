@@ -16,7 +16,7 @@ const { upload, uploadFile } = require('../controllers/uploadController');
 const bulkUploadController = require('../controllers/bulkUploadController');
 const syllabusController = require('../controllers/syllabusController');
 const { createStudentPlacement, getStudentPlacementsByStudentId } = require('../controllers/studentPlacementController');
-const { downloadResume, downloadBulkResumes, downloadAllResumes } = require('../controllers/resumeDownloadController');
+const { downloadResume, downloadBulkResumes, downloadAllResumes, downloadResumes } = require('../controllers/resumeDownloadController');
 const technologyController = require('../controllers/technologyController');
 const placementController = require('../controllers/placementController');
 const mappedStudentController = require("../controllers/mappedStudentController");
@@ -106,8 +106,11 @@ router.post('/upload-profile', upload.single('profilePic'), uploadFile);
 router.post('/upload-resume', upload.single('resume'), uploadFile);
 
 router.get('/download/:studentId', downloadResume);
-router.get('/resumes/download-bulk', downloadBulkResumes);
+router.post('/resumes/download-bulk', downloadBulkResumes);
 router.get('/resumes/downloadall', downloadAllResumes);
+router.get('/resume/download', downloadResumes );
+router.post('/resume/download', downloadResumes );
+
 
 
 router.post('/tech', technologyController.createTechnology);
@@ -117,7 +120,10 @@ router.get('/placements/:placementId/matching-students', placementController.get
 
 router.post("/map", mappedStudentController.createMappedStudent);
 router.get("/placement/:companyId", mappedStudentController.getMappedStudentsByCompanyId);
-
+router.put("/company/:id",mappedStudentController.updateMappedStudent);
+router.get("/student-notifications/:studentId", mappedStudentController.getStudentNotifications);
+router.put("/company-response/:companyId", mappedStudentController.updateStudentResponse);
+router.put('/interview-attendance/:companyId', mappedStudentController.updateInterviewAttendance);
 
 module.exports = router;
 

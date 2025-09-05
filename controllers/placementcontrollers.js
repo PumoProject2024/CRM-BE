@@ -222,7 +222,7 @@ exports.getUpcomingPlacementsdrive = async (req, res) => {
       page = 1,
       limit = 10,
       sortBy = 'dateOfPlacement',
-      sortOrder = 'ASC' // Usually for upcoming we want earliest first
+      sortOrder = 'ASC'
     } = req.query;
 
     const pageNumber = parseInt(page);
@@ -233,7 +233,8 @@ exports.getUpcomingPlacementsdrive = async (req, res) => {
       'dateOfPlacement',
       'companyName',
       'placementOfficerName',
-      'salary'
+      'salary',
+      'status'
     ];
 
     const sortField = allowedSortFields.includes(sortBy) ? sortBy : 'dateOfPlacement';
@@ -241,17 +242,12 @@ exports.getUpcomingPlacementsdrive = async (req, res) => {
       ? sortOrder.toUpperCase()
       : 'ASC';
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0); // Strip time for accurate comparison
     const { count, rows } = await Placement.findAndCountAll({
-      where: {
-        dateOfPlacement: { [Op.gte]: today }
-      },
+      where: { status: 'Open' }, // ✅ only open placements
       limit: pageSize,
       offset,
       order: [[sortField, sortDirection]]
     });
-
 
     res.status(200).json({
       success: true,
@@ -282,7 +278,7 @@ exports.getPastPlacements = async (req, res) => {
       page = 1,
       limit = 10,
       sortBy = 'dateOfPlacement',
-      sortOrder = 'DESC' // Usually latest past first
+      sortOrder = 'DESC'
     } = req.query;
 
     const pageNumber = parseInt(page);
@@ -293,7 +289,8 @@ exports.getPastPlacements = async (req, res) => {
       'dateOfPlacement',
       'companyName',
       'placementOfficerName',
-      'salary'
+      'salary',
+      'status'
     ];
 
     const sortField = allowedSortFields.includes(sortBy) ? sortBy : 'dateOfPlacement';
@@ -301,13 +298,8 @@ exports.getPastPlacements = async (req, res) => {
       ? sortOrder.toUpperCase()
       : 'DESC';
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
     const { count, rows } = await Placement.findAndCountAll({
-      where: {
-        dateOfPlacement: { [Op.lt]: today } // strictly before today
-      },
+      where: { status: ['Abandoned', 'Closed'] }, // ✅ past placements
       limit: pageSize,
       offset,
       order: [[sortField, sortDirection]]
@@ -334,6 +326,7 @@ exports.getPastPlacements = async (req, res) => {
     });
   }
 };
+
 
 exports.getUpcomingPlacements = async (req, res) => {
   try {

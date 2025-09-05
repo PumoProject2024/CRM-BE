@@ -350,7 +350,7 @@ class StudentRegistrationController {
           "courseType", "courseDuration", "classType", "demoGivenBy",
           "registrationPaymentMode", "registrationReferenceNo",
           "adminEmpName", "source", "studentRequestedLocation",
-          "studentRequestedBranch", "adminlocation", "staffAssigned", "studentId",
+          "studentRequestedBranch", "adminlocation", "staffAssigned", "studentId","studentProgressStatus"
         ],
         decimalFields: ["courseFees", "feesCollected", "pendingFees", "discountAmount", "pendingFees2", "pendingFees3", "pendingFees4"],
         numericFields: ["id", "placementneeded"],
@@ -916,6 +916,7 @@ class StudentRegistrationController {
           'adminbranch',
           'profilePicPath',
           'staffAssigned',
+          'placementneeded'
         ]
       });
 
@@ -1118,6 +1119,7 @@ static async updateStudentProfile(req, res) {
           'adminbranch',
           'profilePicPath',
           'staffAssigned',
+          'placementneeded'
 
         ]
       });

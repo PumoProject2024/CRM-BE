@@ -1,4 +1,5 @@
 const StudentCourse = require('../models/StudentCourse');
+const StudentRegistration = require('../models/studenReg');
 const { Sequelize, Op } = require('sequelize');
 
 const studentCourseController = {
@@ -461,14 +462,17 @@ const studentCourseController = {
     try {
       const {
         // Multi-select filters from frontend
-        courseTypes,
-        courseNames,
+        departments,
+        skillsKnown,
         branches,
         companyLocations,
         experiences,
-        // Single filters (keeping for backward compatibility)
+        // Legacy course filters (keeping for backward compatibility)
+        courseTypes,
+        courseNames,
         courseType,
         courseName,
+        // Single filters (keeping for backward compatibility)
         batch,
         learningMode,
         branch,
@@ -482,18 +486,43 @@ const studentCourseController = {
         sortOrder = 'DESC'
       } = req.query;
 
-      // Base condition: Only students who need placement and completed course
+      // Base condition: Only students who need placement
       const whereClause = {
-        placementneeded: 'Yes',
-        ProgressStatus: 'Course Completed'
+        placementneeded: 'Yes'
       };
 
-      // Handle multi-select filters
+      // Handle departments filter - assuming you have a department field in your model
+      if (departments) {
+        const departmentArray = departments.split(',').map(dept => dept.trim());
+        whereClause.Department = { [Op.in]: departmentArray };
+      }
+
+      // Handle skillsKnown filter - assuming this maps to a field in your model
+      // You might need to adjust this based on how skills are stored in your database
+      if (skillsKnown) {
+        const skillsArray = skillsKnown.split(',').map(skill => skill.trim());
+
+        // If skills are stored as comma-separated values in a single field
+        const skillConditions = skillsArray.map(skill => ({
+          knownSkill: { [Op.iLike]: `%${skill}%` }
+        }));
+
+        if (whereClause[Op.or]) {
+          whereClause[Op.and] = [
+            { [Op.or]: whereClause[Op.or] },
+            { [Op.or]: skillConditions }
+          ];
+          delete whereClause[Op.or];
+        } else {
+          whereClause[Op.or] = skillConditions;
+        }
+      }
+
+      // Legacy course filters (keeping for backward compatibility)
       if (courseTypes) {
         const courseTypeArray = courseTypes.split(',').map(type => type.trim());
         whereClause.courseType = { [Op.in]: courseTypeArray };
       } else if (courseType) {
-        // Backward compatibility for single courseType
         whereClause.courseType = courseType;
       }
 
@@ -501,7 +530,6 @@ const studentCourseController = {
         const courseNameArray = courseNames.split(',').map(name => name.trim());
         whereClause.courseName = { [Op.in]: courseNameArray };
       } else if (courseName) {
-        // Backward compatibility for single courseName
         whereClause.courseName = courseName;
       }
 
@@ -509,16 +537,14 @@ const studentCourseController = {
         const branchArray = branches.split(',').map(branch => branch.trim());
         whereClause.branch = { [Op.in]: branchArray };
       } else if (branch) {
-        // Backward compatibility for single branch
         whereClause.branch = branch;
       }
 
-      // FIXED: Handle company locations filter for comma-separated values
+      // Handle company locations filter for comma-separated values
       if (companyLocations) {
         const locationArray = companyLocations.split(',').map(location => location.trim());
 
         if (locationArray.length > 0) {
-          // Always include students with No Constraint
           const locationConditions = [
             { desiredlocation: { [Op.iLike]: '%No Constraint%' } },
             ...locationArray.map(location => ({
@@ -526,12 +552,20 @@ const studentCourseController = {
             }))
           ];
 
-          whereClause[Op.or] = locationConditions;
+          if (whereClause[Op.or]) {
+            whereClause[Op.and] = [
+              { [Op.or]: whereClause[Op.or] },
+              { [Op.or]: locationConditions }
+            ];
+          } else if (whereClause[Op.and]) {
+            whereClause[Op.and].push({ [Op.or]: locationConditions });
+          } else {
+            whereClause[Op.or] = locationConditions;
+          }
         }
       }
 
-
-      // Handle experience filter (assuming you have this field in your model)
+      // Handle experience filter
       if (experiences) {
         const experienceArray = experiences.split(',').map(exp => exp.trim());
         whereClause.experience = { [Op.in]: experienceArray };
@@ -541,7 +575,7 @@ const studentCourseController = {
       if (batch) whereClause.batch = batch;
       if (learningMode) whereClause.learningMode = learningMode;
 
-      // Search functionality
+      // Search functionality - search in StudentCourse fields
       if (searchField && searchValue) {
         whereClause[searchField] = { [Op.iLike]: `%${searchValue}%` };
       }
@@ -558,44 +592,139 @@ const studentCourseController = {
 
       // Debug logging
       console.log('Applied whereClause:', JSON.stringify(whereClause, null, 2));
-      console.log('Received filters:', {
-        courseTypes,
-        courseNames,
-        branches,
-        companyLocations,
-        experiences,
-        searchField,
-        searchValue
-      });
 
-      // Fetch records
-      const { count, rows } = await StudentCourse.findAndCountAll({
+      // First query: Fetch records from StudentCourse
+      const studentCourseResults = await StudentCourse.findAll({
         where: whereClause,
-        limit: pageSize,
-        offset,
         order: [[sortField, sortDirection]]
       });
 
-      const totalPages = Math.ceil(count / pageSize);
+      if (studentCourseResults.length === 0) {
+        return res.json({
+          success: true,
+          data: [],
+          pagination: {
+            currentPage: pageNumber,
+            totalPages: 0,
+            totalRecords: 0,
+            recordsOnCurrentPage: 0,
+            recordsPerPage: pageSize,
+            hasNextPage: false,
+            hasPrevPage: false
+          },
+          filters: {
+            departments,
+            skillsKnown,
+            branches,
+            companyLocations,
+            experiences,
+            // Legacy filters
+            courseTypes,
+            courseNames,
+            courseType,
+            courseName,
+            batch,
+            learningMode,
+            branch,
+            searchField,
+            searchValue,
+            sortBy: sortField,
+            sortOrder: sortDirection
+          }
+        });
+      }
+
+      // Extract studentIds from the results
+      const studentIds = studentCourseResults.map(row => row.studentId);
+
+      // Second query: Get registration details for found students with pending fees filter
+      const registrationWhereClause = {
+        studentId: { [Op.in]: studentIds },
+        [Op.and]: [
+          {
+            [Op.or]: [
+              { pendingFees: { [Op.or]: [null, 0] } },
+              { pendingFees: { [Op.is]: null } }
+            ]
+          },
+          {
+            [Op.or]: [
+              { pendingFees2: { [Op.or]: [null, 0] } },
+              { pendingFees2: { [Op.is]: null } }
+            ]
+          },
+          {
+            [Op.or]: [
+              { pendingFees3: { [Op.or]: [null, 0] } },
+              { pendingFees3: { [Op.is]: null } }
+            ]
+          },
+          {
+            [Op.or]: [
+              { pendingFees4: { [Op.or]: [null, 0] } },
+              { pendingFees4: { [Op.is]: null } }
+            ]
+          }
+        ]
+      };
+
+      // Add educationCourse search filter if provided
+      if (searchField === 'educationCourse' && searchValue) {
+        registrationWhereClause.educationCourse = { [Op.iLike]: `%${searchValue}%` };
+      }
+
+      const registrationData = await StudentRegistration.findAll({
+        where: registrationWhereClause,
+        attributes: ['studentId', 'resumePath', 'educationCourse', 'pendingFees', 'pendingFees2', 'pendingFees3', 'pendingFees4']
+      });
+
+      // Create a set of eligible student IDs (those with all pending fees as 0 or null)
+      const eligibleStudentIds = new Set(registrationData.map(reg => reg.studentId));
+
+      // Filter StudentCourse results to only include eligible students
+      const filteredStudentCourseResults = studentCourseResults.filter(row =>
+        eligibleStudentIds.has(row.studentId)
+      );
+
+      // Create a map for registration data for easy lookup
+      const registrationMap = registrationData.reduce((map, reg) => {
+        map[reg.studentId] = reg.toJSON();
+        return map;
+      }, {});
+
+      // Apply pagination to filtered results
+      const totalRecords = filteredStudentCourseResults.length;
+      const paginatedResults = filteredStudentCourseResults.slice(offset, offset + pageSize);
+
+      // Combine the data
+      const enrichedRows = paginatedResults.map(row => ({
+        ...row.toJSON(),
+        studentRegistration: registrationMap[row.studentId] || null
+      }));
+
+      const totalPages = Math.ceil(totalRecords / pageSize);
 
       return res.json({
         success: true,
-        data: rows,
+        data: enrichedRows,
         pagination: {
           currentPage: pageNumber,
           totalPages,
-          totalRecords: count,
-          recordsOnCurrentPage: rows.length,
+          totalRecords,
+          recordsOnCurrentPage: enrichedRows.length,
           recordsPerPage: pageSize,
           hasNextPage: pageNumber < totalPages,
           hasPrevPage: pageNumber > 1
         },
         filters: {
-          courseTypes,
-          courseNames,
+          departments,
+          skillsKnown,
           branches,
           companyLocations,
           experiences,
+          // Legacy filters
+          courseTypes,
+          courseNames,
           courseType,
           courseName,
           batch,
