@@ -2,6 +2,7 @@ const express = require('express');
 const StudentRegistrationController = require('../controllers/studentCon');
 const employeeController = require("../controllers/employeeController");
 const authMiddleware = require("../middleware/authMiddleware");
+const studentAuthMiddleware = require('../middleware/studentAuthMiddleware');
 const { createInvoice, getInvoices } = require('../controllers/invoiceController');
 const { getAllCourses, createCourse, updateCourse, deleteCourse, getCourseByNameAndType, } = require('../controllers/courseController');
 const { getAllLocations, createLocationBranch } = require('../controllers/locationController');
@@ -79,11 +80,12 @@ router.delete("/employees/:emp_id", employeeController.deleteEmployeeById);
 router.post('/student-record', studentCourseController.create);
 router.get('/students-record', authMiddleware, studentCourseController.getAll);
 router.get('/placed-record', authMiddleware, studentCourseController.placed);
-router.put('/students-record/:id', studentCourseController.update);
+router.put('/students-record/:id',authMiddleware, studentCourseController.update);
 router.get("/trainers", employeeController.getTrainerEmployees);
+
 router.get("/placement-officer", employeeController.getPlacementOfficerNames);
 
-
+ 
 router.post('/attendance', authMiddleware, attendanceController.createAttendance);
 router.get('/attendance/:studentId', authMiddleware, attendanceController.getAttendanceByStudentId);
 router.put('/attendance/:id', authMiddleware, attendanceController.updateAttendance);
@@ -100,8 +102,10 @@ router.post('/studentplacement', authMiddleware, createStudentPlacement);
 router.get('/studentplacement/:studentId', authMiddleware, getStudentPlacementsByStudentId);
 
 router.post('/logined', StudentRegistrationController.studentLogin);
-router.put('/studentpro/:studentId', StudentRegistrationController.updateStudentProfile);
-router.get('/student/:studentId', StudentRegistrationController.getStudentById);
+router.post('/setup-password',StudentRegistrationController.setupPassword);
+router.post('/student/reset-default-password', authMiddleware, StudentRegistrationController.resetStudentToDefaultPassword);
+router.put('/studentpro/:studentId',studentAuthMiddleware, StudentRegistrationController.updateStudentProfile);
+router.get('/student/:studentId', studentAuthMiddleware,StudentRegistrationController.getStudentById);
 router.post('/upload-profile', upload.single('profilePic'), uploadFile);
 router.post('/upload-resume', upload.single('resume'), uploadFile);
 
@@ -110,8 +114,6 @@ router.post('/resumes/download-bulk', downloadBulkResumes);
 router.get('/resumes/downloadall', downloadAllResumes);
 router.get('/resume/download', downloadResumes );
 router.post('/resume/download', downloadResumes );
-
-
 
 router.post('/tech', technologyController.createTechnology);
 router.get('/alltech', technologyController.getTechnologies);
@@ -124,8 +126,25 @@ router.put("/company/:id",mappedStudentController.updateMappedStudent);
 router.get("/student-notifications/:studentId", mappedStudentController.getStudentNotifications);
 router.put("/company-response/:companyId", mappedStudentController.updateStudentResponse);
 router.put('/interview-attendance/:companyId', mappedStudentController.updateInterviewAttendance);
+router.put('/:companyId/selection', authMiddleware, mappedStudentController.updateStudentSelection);
+
+router.post('/student/:studentId/approve-skills', 
+  studentAuthMiddleware, 
+  (req, res, next) => {
+    req.body.updatedBy = 'student';
+    next();
+  },
+  StudentRegistrationController.approveSkills
+);
+
+// Staff approving student's skill updates  
+router.post('/students-record/:id/approve-skills', 
+  authMiddleware,
+  (req, res, next) => {
+    req.body.updatedBy = 'staff';
+    next();
+  },
+  StudentRegistrationController.approveSkills
+);
 
 module.exports = router;
-
-
-

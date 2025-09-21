@@ -59,11 +59,26 @@ const MappedStudent = sequelize.define('MappedStudent', {
     comment: 'When attendance was last updated'
   },
 
-
-  isSelected: {
+   isSelected: {
     type: DataTypes.BOOLEAN,
-    defaultValue: false,
+    defaultValue: null,
+    comment: 'null = not decided, true = selected, false = not selected'
   },
+
+  selectionFeedback: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    defaultValue: null,
+    comment: 'Company feedback about the selection decision'
+  },
+
+  selectionUpdatedAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    defaultValue: null,
+    comment: 'When selection status was last updated'
+  },
+
 
 }, {
   tableName: 'MappedStudents',

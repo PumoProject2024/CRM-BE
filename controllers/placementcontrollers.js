@@ -16,6 +16,7 @@ exports.createPlacement = async (req, res) => {
       experienceRequired,
       salary,
       bond,
+      bondDetails,     
       action,
       dateOfPlacement,
       directApply,
@@ -29,7 +30,44 @@ exports.createPlacement = async (req, res) => {
       skillKnown          
     } = req.body;
 
+    // Generate jobId with format: <Department>-<Date>-<seq#>
+    const generateJobId = async (department, date) => {
+      // Format date as DDMMYY
+      const dateObj = new Date(date);
+      const day = String(dateObj.getDate()).padStart(2, '0');
+      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const year = String(dateObj.getFullYear()).slice(-2);
+      const formattedDate = `${day}${month}${year}`;
+      
+      // Get department abbreviation (you might want to customize this based on your departments)
+      const deptAbbr = department.toUpperCase().replace(/\s+/g, '').substring(0, 3);
+      
+      // Find the last sequence number for this department and date
+      const lastPlacement = await Placement.findOne({
+        where: {
+          jobId: {
+            [Op.like]: `${deptAbbr}-${formattedDate}-%`
+          }
+        },
+        order: [['jobId', 'DESC']]
+      });
+      
+      let seqNum = 1;
+      if (lastPlacement && lastPlacement.jobId) {
+        const lastSeq = parseInt(lastPlacement.jobId.split('-')[2]);
+        seqNum = lastSeq + 1;
+      }
+      
+      const seqStr = String(seqNum).padStart(2, '0');
+      return `${deptAbbr}-${formattedDate}-${seqStr}`;
+    };
+
+    // Generate jobId using Department and requirementIdentifiedDate (or current date if not provided)
+    const jobIdDate = requirementIdentifiedDate || new Date().toISOString().split('T')[0];
+    const jobId = await generateJobId(Department, jobIdDate);
+
     const newPlacement = await Placement.create({
+      jobId,               // Added jobId
       placementOfficerName,
       companyName,
       companyLocation,
@@ -42,6 +80,7 @@ exports.createPlacement = async (req, res) => {
       experienceRequired,
       salary,
       bond,
+      bondDetails,         // Added bondDetails
       action,
       dateOfPlacement,
       directApply,
@@ -58,7 +97,8 @@ exports.createPlacement = async (req, res) => {
 
     res.status(201).json({
       message: 'Placement record created successfully',
-      data: newPlacement
+      data: newPlacement,
+      jobId: jobId        // Return the generated jobId
     });
 
   } catch (error) {
@@ -77,6 +117,7 @@ exports.createPlacement = async (req, res) => {
     });
   }
 };
+
 exports.updatePlacement = async (req, res) => {
   try {
     const { id } = req.params; // Get placement ID from URL parameters
@@ -97,6 +138,7 @@ exports.updatePlacement = async (req, res) => {
       experienceRequired,
       salary,
       bond,
+      bondDetails,
       action,
       dateOfPlacement,
       directApply,
@@ -153,6 +195,7 @@ exports.updatePlacement = async (req, res) => {
       experienceRequired,
       salary,
       bond,
+      bondDetails,
       action,
       dateOfPlacement,
       directApply,
@@ -243,7 +286,7 @@ exports.getUpcomingPlacementsdrive = async (req, res) => {
       : 'ASC';
 
     const { count, rows } = await Placement.findAndCountAll({
-      where: { status: 'Open' }, // ✅ only open placements
+      where: { status: 'Awaiting Profiles' }, // ✅ only open placements
       limit: pageSize,
       offset,
       order: [[sortField, sortDirection]]

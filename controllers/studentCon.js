@@ -3,6 +3,9 @@ const StudentRegistration = require('../models/studenReg');
 const StudentCourse = require('../models/StudentCourse');
 const sequelize = require('../config/database');
 const { fn, col, where } = require('sequelize');
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+require('dotenv').config();
 
 
 // Now you can use sequelize in your updateStudentRegistration function
@@ -350,7 +353,7 @@ class StudentRegistrationController {
           "courseType", "courseDuration", "classType", "demoGivenBy",
           "registrationPaymentMode", "registrationReferenceNo",
           "adminEmpName", "source", "studentRequestedLocation",
-          "studentRequestedBranch", "adminlocation", "staffAssigned", "studentId","studentProgressStatus"
+          "studentRequestedBranch", "adminlocation", "staffAssigned", "studentId", "studentProgressStatus"
         ],
         decimalFields: ["courseFees", "feesCollected", "pendingFees", "discountAmount", "pendingFees2", "pendingFees3", "pendingFees4"],
         numericFields: ["id", "placementneeded"],
@@ -916,7 +919,8 @@ class StudentRegistrationController {
           'adminbranch',
           'profilePicPath',
           'staffAssigned',
-          'placementneeded'
+          'placementneeded',
+          'password'
         ]
       });
 
@@ -927,58 +931,98 @@ class StudentRegistrationController {
         });
       }
 
-      if (student.studentId !== password) {
+      // Check if it's first time login (password is null/empty)
+      if (!student.password) {
+        // First time login - check studentId as password
+        if (student.studentId !== password) {
+          return res.status(401).json({
+            success: false,
+            message: 'Invalid student ID',
+          });
+        }
+
+        // Fetch course details
+        const courseDetails = await StudentCourse.findOne({
+          where: { studentId: student.studentId },
+          attributes: [
+            'syllabusCovered', 'courseStartDate', 'courseEndDate',
+            'mockTest1Score', 'mockTest2Score', 'mockTest3Score',
+            'technicalScore', 'communicationScore',
+            'project1Score', 'project2Score', 'project3Score',
+            'projectTitle1', 'projectTitle2', 'projectTitle3',
+            'project1Status', 'project2Status', 'project3Status',
+            'desiredlocation', 'gender', 'tenthPassout', 'tenthPercentage',
+            'twelfthPassout', 'twelfthPercentage', 'collegePassout',
+            'cgpa', 'Department', 'skillSet', 'knownSkill'
+          ]
+        });
+
+        const response = {
+          ...student.toJSON(),
+          courseDetails: courseDetails ? courseDetails.toJSON() : null
+        };
+
+        return res.status(200).json({
+          success: true,
+          message: 'First time login - password setup required',
+          student: response,
+          requirePasswordSetup: true
+        });
+      }
+
+      // Not first time login - verify hashed password
+      const isPasswordValid = await bcrypt.compare(password, student.password);
+      if (!isPasswordValid) {
         return res.status(401).json({
           success: false,
           message: 'Invalid password',
         });
       }
 
-      // ✅ Now fetch course details from StudentCourse
+      // Fetch course details
       const courseDetails = await StudentCourse.findOne({
         where: { studentId: student.studentId },
         attributes: [
-          'syllabusCovered',
-          'courseStartDate',
-          'courseEndDate',
-          'mockTest1Score',
-          'mockTest2Score',
-          'mockTest3Score',
-          'technicalScore',
-          'communicationScore',
-          'project1Score',
-          'project2Score',
-          'project3Score',
-          'projectTitle1',
-          'projectTitle2',
-          'projectTitle3',
-          'project1Status',
-          'project2Status',
-          'desiredlocation',
-          'project3Status',
-          'gender',
-          'tenthPassout',
-          'tenthPercentage',
-          'twelfthPassout',
-          'twelfthPercentage',
-          'collegePassout',
-          'cgpa',
-          'Department',
-          'skillSet',
-          'knownSkill'
+          'syllabusCovered', 'courseStartDate', 'courseEndDate',
+          'mockTest1Score', 'mockTest2Score', 'mockTest3Score',
+          'technicalScore', 'communicationScore',
+          'project1Score', 'project2Score', 'project3Score',
+          'projectTitle1', 'projectTitle2', 'projectTitle3',
+          'project1Status', 'project2Status', 'project3Status',
+          'desiredlocation', 'gender', 'tenthPassout', 'tenthPercentage',
+          'twelfthPassout', 'twelfthPercentage', 'collegePassout',
+          'cgpa', 'Department', 'skillSet', 'knownSkill'
         ]
       });
 
-      // Combine data
+      // Generate JWT token for student
+      const tokenPayload = {
+        studentId: student.studentId,
+        name: student.name,
+        email_Id: student.email_Id,
+        course: student.course,
+        courseType: student.courseType,
+        userType: 'student' // To distinguish from employee tokens
+      };
+
+      const token = jwt.sign(tokenPayload, process.env.JWT_SECRET, {
+        expiresIn: '7d' // Token expires in 7 days
+      });
+
       const response = {
         ...student.toJSON(),
         courseDetails: courseDetails ? courseDetails.toJSON() : null
       };
 
+      // Remove password from response for security
+      delete response.password;
+
       res.status(200).json({
         success: true,
         message: 'Login successful',
-        student: response
+        student: response,
+        token: token,
+        requirePasswordSetup: false
       });
 
     } catch (error) {
@@ -990,101 +1034,420 @@ class StudentRegistrationController {
       });
     }
   }
-// Updated updateStudentProfile function
-static async updateStudentProfile(req, res) {
+  // Password setup controller remains the same
+  static async setupPassword(req, res) {
+    try {
+      const { studentId, newPassword, confirmPassword } = req.body;
+
+      if (!studentId || !newPassword || !confirmPassword) {
+        return res.status(400).json({
+          success: false,
+          message: 'Student ID, new password and confirm password are required',
+        });
+      }
+
+      if (newPassword !== confirmPassword) {
+        return res.status(400).json({
+          success: false,
+          message: 'New password and confirm password do not match',
+        });
+      }
+
+      // Password validation
+      const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+      if (!passwordRegex.test(newPassword)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Password must contain at least 8 characters, 1 uppercase, 1 lowercase, 1 number and 1 special character',
+        });
+      }
+
+      // Find student
+      const student = await StudentRegistration.findOne({
+        where: { studentId: studentId }
+      });
+
+      if (!student) {
+        return res.status(404).json({
+          success: false,
+          message: 'Student not found',
+        });
+      }
+
+      // Check if password is already set
+      if (student.password) {
+        return res.status(400).json({
+          success: false,
+          message: 'Password is already set for this student',
+        });
+      }
+
+      // Hash the new password
+      const saltRounds = 10;
+      const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+
+      // Update student password
+      await StudentRegistration.update(
+        { password: hashedPassword },
+        { where: { studentId: studentId } }
+      );
+
+      res.status(200).json({
+        success: true,
+        message: 'Password set successfully. Please login with your new password.',
+      });
+
+    } catch (error) {
+      console.error('Password setup error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Internal server error',
+        error: error.message,
+      });
+    }
+  }
+  static async resetStudentToDefaultPassword(req, res) {
+    try {
+      const { email_Id, studentId } = req.body;
+
+      // Ensure only Super-Admin or Branch-Head can call this
+      if (!req.user || !["Super-Admin", "Branch-Head"].includes(req.user.role)) {
+        return res.status(403).json({
+          success: false,
+          message: "Forbidden: Super-Admins and Branch-Heads only"
+        });
+      }
+
+      // Validate input - need either email or studentId
+      if (!email_Id && !studentId) {
+        return res.status(400).json({
+          success: false,
+          message: "Email or Student ID is required"
+        });
+      }
+
+      // Build where condition based on provided input
+      let whereCondition = {};
+      if (email_Id) {
+        whereCondition.email_Id = email_Id;
+      } else {
+        whereCondition.studentId = studentId;
+      }
+
+      const student = await StudentRegistration.findOne({
+        where: whereCondition,
+        attributes: ['studentId', 'email_Id', 'name', 'contactNo']
+      });
+
+      if (!student) {
+        return res.status(404).json({
+          success: false,
+          message: "Student not found"
+        });
+      }
+
+      // Reset password to null (so they use studentId as password on next login)
+      await StudentRegistration.update(
+        {
+          password: null, // Reset to null - forces first-time login flow
+        },
+        { where: { studentId: student.studentId } }
+      );
+
+      res.status(200).json({
+        success: true,
+        message: "Student password reset to default successfully. Student will use Student ID as password on next login.",
+        student: {
+          studentId: student.studentId,
+          email_Id: student.email_Id,
+          name: student.name
+        },
+        resetInfo: {
+          defaultPassword: student.studentId, // Student ID is the default password
+          requiresPasswordSetup: true
+        }
+      });
+
+    } catch (error) {
+      console.error("Student default password reset error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error",
+        error: error.message
+      });
+    }
+  }
+  // Updated updateStudentProfile function
+  // StudentRegistrationController.js - Updated updateStudentProfile method
+  static async updateStudentProfile(req, res) {
+    try {
+      const { studentId } = req.params;
+      const {
+        name,
+        email_Id,
+        contactNo,
+        ParentNo,
+        address,
+        educationLevel,
+        department,
+        clg_name,
+        educationCourse,
+        studentStatus,
+        dob,
+        studentRequirement,
+        desiredlocation,
+        gender,
+        tenthPassout,
+        tenthPercentage,
+        twelfthPassout,
+        twelfthPercentage,
+        collegePassout,
+        cgpa,
+        Department,
+        knownSkill,
+        skillSet
+      } = req.body;
+
+      const updatedBy = 'student'; // Since this route uses studentAuthMiddleware
+
+      console.log('Student Profile Update:', {
+        studentId,
+        updatedBy,
+        studentFromToken: req.student?.studentId,
+        skillsReceived: { knownSkill, skillSet }
+      });
+
+      // Authorization check - student can only update their own profile
+      if (req.student && req.student.studentId !== studentId) {
+        return res.status(403).json({
+          success: false,
+          message: 'You can only update your own profile'
+        });
+      }
+
+      // Get current data to check if skills changed
+      const currentRecord = await StudentCourse.findOne({
+        where: { studentId }
+      });
+
+      if (!currentRecord) {
+        return res.status(404).json({ success: false, message: 'Student not found.' });
+      }
+
+      // Check if knownSkill was modified
+      const currentKnownSkills = currentRecord.knownSkill || '';
+      const newKnownSkills = Array.isArray(knownSkill) ? knownSkill.join(",") : (knownSkill || "");
+      const skillsChanged = currentKnownSkills !== newKnownSkills;
+
+      console.log('Skills comparison:', {
+        current: currentKnownSkills,
+        new: newKnownSkills,
+        changed: skillsChanged
+      });
+
+      // Update StudentRegistration
+      const [updatedRows] = await StudentRegistration.update({
+        name,
+        email_Id,
+        contactNo,
+        ParentNo,
+        address,
+        educationLevel,
+        department,
+        clg_name,
+        educationCourse,
+        studentStatus,
+        dob,
+        studentRequirement,
+      }, {
+        where: { studentId }
+      });
+
+      // Prepare update object for StudentCourse
+      const courseUpdateData = {
+        studentName: name,
+        email_Id,
+        studentContactNumber: contactNo,
+        educationQualification: educationLevel,
+        clgName: clg_name,
+        gender,
+        tenthPassout,
+        tenthPercentage,
+        twelfthPassout,
+        twelfthPercentage,
+        collegePassout,
+        cgpa,
+        desiredlocation: Array.isArray(desiredlocation) ? desiredlocation.join(",") : (desiredlocation || ""),
+        skillSet: Array.isArray(skillSet) ? skillSet.join(",") : (skillSet || ""),
+        Department,
+        modified_by: req.student?.studentId // Track who modified
+      };
+
+      // Handle skill approval logic for student updates
+      if (skillsChanged) {
+        courseUpdateData.knownSkill = newKnownSkills;
+        courseUpdateData.lastSkillUpdateBy = updatedBy;
+        courseUpdateData.skillUpdateTimestamp = new Date();
+
+        // Student updated skills - staff needs to approve  
+        courseUpdateData.stuapprove = true;
+        courseUpdateData.staffapprove = false;
+      }
+
+      // Update StudentCourse
+      await StudentCourse.update(courseUpdateData, {
+        where: { studentId }
+      });
+
+      console.log('Student profile update completed:', {
+        skillsChanged,
+        approvals: skillsChanged ? {
+          stuapprove: courseUpdateData.stuapprove,
+          staffapprove: courseUpdateData.staffapprove
+        } : 'No skill changes'
+      });
+
+      if (updatedRows === 0) {
+        return res.status(404).json({ success: false, message: 'Student not found.' });
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: skillsChanged
+          ? 'Student profile updated successfully. Skills are pending staff approval.'
+          : 'Student profile updated successfully.',
+        skillsChanged,
+        updatedBy,
+        updatedFields: skillsChanged ? {
+          skillSet: courseUpdateData.skillSet,
+          knownSkill: courseUpdateData.knownSkill,
+          stuapprove: courseUpdateData.stuapprove,
+          staffapprove: courseUpdateData.staffapprove
+        } : null
+      });
+
+    } catch (error) {
+      console.error('Student profile update error:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Internal server error',
+        error: error.message
+      });
+    }
+  }
+
+ static async approveSkills(req, res) {
   try {
-    const { studentId } = req.params;
+    const { studentId, id } = req.params; // studentId from student route, id from staff route
+    const recordId = studentId || id; // Use whichever is provided
+    const { approved, updatedBy } = req.body;
 
-    const {
-      name,
-      email_Id,
-      contactNo,
-      ParentNo,
-      address,
-      educationLevel,
-      department,
-      clg_name,
-      educationCourse,
-      studentStatus,
-      dob,
-      studentRequirement,
-      desiredlocation,
-      gender,
-      tenthPassout,
-      tenthPercentage,
-      twelfthPassout,
-      twelfthPercentage,
-      collegePassout,
-      cgpa,
-      Department,
-      knownSkill,
-      skillSet
-    } = req.body;
-
-    console.log('Received skillSet:', skillSet);
-    console.log('Received knownSkill:', knownSkill);
-
-    // Update StudentRegistration
-    const [updatedRows] = await StudentRegistration.update({
-      name,
-      email_Id,
-      contactNo,
-      ParentNo,
-      address,
-      educationLevel,
-      department,
-      clg_name,
-      educationCourse,
-      studentStatus,
-      dob,
-      studentRequirement,
-    }, {
-      where: { studentId }
+    console.log('Skill approval request:', { 
+      recordId, 
+      approved, 
+      updatedBy,
+      userType: req.user ? 'staff' : req.student ? 'student' : 'unknown',
+      staffInfo: req.user ? { emp_id: req.user.emp_id, role: req.user.role } : null,
+      studentInfo: req.student ? { studentId: req.student.studentId } : null
     });
 
-    // Update StudentCourse with proper array handling
-    await StudentCourse.update({
-      studentName: name,
-      email_Id,
-      studentContactNumber: contactNo,
-      educationQualification: educationLevel,
-      clgName: clg_name,
-      gender,
-      tenthPassout,
-      tenthPercentage,
-      twelfthPassout,
-      twelfthPercentage,
-      collegePassout,
-      cgpa,
-      desiredlocation: Array.isArray(desiredlocation) ? desiredlocation.join(",") : (desiredlocation || ""),
-      knownSkill: Array.isArray(knownSkill) ? knownSkill.join(",") : (knownSkill || ""),
-      skillSet: Array.isArray(skillSet) ? skillSet.join(",") : (skillSet || ""),
-      Department
-    }, {
-      where: { studentId }
-    });
-
-    console.log('Updated skillSet in DB:', Array.isArray(skillSet) ? skillSet.join(",") : (skillSet || ""));
-    console.log('Updated knownSkill in DB:', Array.isArray(knownSkill) ? knownSkill.join(",") : (knownSkill || ""));
-
-    if (updatedRows === 0) {
-      return res.status(404).json({ success: false, message: 'Student not found.' });
+    // ✅ Authorization checks
+    if (updatedBy === 'student' && req.student) {
+      // Student can only approve their own profile
+      if (req.student.studentId !== recordId) {
+        return res.status(403).json({ 
+          success: false, 
+          message: 'Students can only approve their own profile' 
+        });
+      }
     }
 
-    return res.status(200).json({ 
-      success: true, 
-      message: 'Student profile updated successfully.',
-      updatedFields: {
-        skillSet: Array.isArray(skillSet) ? skillSet.join(",") : (skillSet || ""),
-        knownSkill: Array.isArray(knownSkill) ? knownSkill.join(",") : (knownSkill || "")
+    // ✅ Find the record - try by studentId first, then by id
+    let whereClause = {};
+    if (studentId) {
+      whereClause = { studentId: recordId };
+    } else {
+      whereClause = { id: recordId };
+    }
+
+    const existingRecord = await StudentCourse.findOne({ where: whereClause });
+
+    if (!existingRecord) {
+      return res.status(404).json({
+        success: false,
+        message: 'Student record not found'
+      });
+    }
+
+    // ✅ Staff approval logic - allow ANY staff (remove mentor restriction)
+    if (updatedBy === 'staff' && req.user) {
+      console.log('Staff approval allowed for any staff:', {
+        emp_id: req.user.emp_id,
+        role: req.user.role
+      });
+    }
+
+    // ✅ Build update data
+    let updateData = {
+      skillUpdateTimestamp: new Date()
+    };
+
+    if (updatedBy === 'student') {
+      // Student is approving staff's skill updates
+      updateData.stuapprove = approved;
+      console.log('Student approval:', { stuapprove: approved });
+    } else if (updatedBy === 'staff') {
+      // Staff is approving student's skill updates
+      updateData.staffapprove = approved;
+      console.log('Staff approval:', { staffapprove: approved });
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid updatedBy value. Must be "student" or "staff"'
+      });
+    }
+
+    // ✅ Perform update
+    const [updatedRows] = await StudentCourse.update(updateData, {
+      where: whereClause
+    });
+
+    if (updatedRows === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Failed to update approval status'
+      });
+    }
+
+    // ✅ Get updated record for response
+    const updatedRecord = await StudentCourse.findOne({
+      where: whereClause,
+      attributes: ['stuapprove', 'staffapprove', 'skillUpdateTimestamp', 'lastSkillUpdateBy']
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: approved ? 'Skills approved successfully' : 'Skills rejected successfully',
+      approvalType: updatedBy,
+      approved,
+      currentStatus: {
+        stuapprove: updatedRecord.stuapprove,
+        staffapprove: updatedRecord.staffapprove,
+        lastSkillUpdateBy: updatedRecord.lastSkillUpdateBy,
+        skillUpdateTimestamp: updatedRecord.skillUpdateTimestamp
       }
     });
 
   } catch (error) {
-    console.error('Update error:', error);
-    return res.status(500).json({ success: false, message: 'Internal server error', error: error.message });
+    console.error('Skill approval error:', error);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Internal server error', 
+      error: error.message 
+    });
   }
 }
+
   static async getStudentById(req, res) {
     try {
       const { studentId } = req.params;
@@ -1162,7 +1525,10 @@ static async updateStudentProfile(req, res) {
           'cgpa',
           'Department',
           'skillSet',
-          'knownSkill'
+          'knownSkill',
+          'mentor',
+          'mentorid',
+          'mentorNumber'
         ]
       });
 

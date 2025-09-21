@@ -407,57 +407,154 @@ const studentCourseController = {
   },
   // UPDATE - Update student course record
   update: async (req, res) => {
+    console.log('=== STAFF UPDATE REQUEST START ===');
+    console.log('Request params:', req.params);
+    console.log('Request body:', req.body);
+    console.log('User from token:', {
+      emp_id: req.user?.emp_id,
+      emp_name: req.user?.emp_name,
+      role: req.user?.role
+    });
+
     try {
       const { id } = req.params;
       const updateData = { ...req.body };
+      const updatedBy = 'staff'; // Since this route uses authMiddleware
 
-      // Add modified_by field if not present
-      if (req.user && req.user.id) {
-        updateData.modified_by = req.user.id;
+      if (Object.keys(updateData).length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "No data provided for update"
+        });
       }
 
-      const [updatedRowsCount] = await StudentCourse.update(updateData, {
+      const existingRecord = await StudentCourse.findByPk(id);
+      if (!existingRecord) {
+        return res.status(404).json({
+          success: false,
+          message: "Student course record not found"
+        });
+      }
+
+      console.log('Existing record details:', {
+        studentId: existingRecord.studentId,
+        mentorid: existingRecord.mentorid,
+        mentor: existingRecord.mentor,
+        currentKnownSkills: existingRecord.knownSkill
+      });
+
+      // === Mentor update check ===
+      const mentorFields = ["mentor", "mentorid", "mentorNumber"];
+      const tryingToUpdateMentor = mentorFields.some(
+        field => field in updateData && updateData[field] !== existingRecord[field]
+      );
+
+      if (tryingToUpdateMentor) {
+        if (existingRecord.mentorid && req.user.emp_id.toString() !== existingRecord.mentorid.toString()) {
+          console.log('Mentor authorization failed:', {
+            existingMentorId: existingRecord.mentorid,
+            currentUserEmpId: req.user.emp_id,
+            match: req.user.emp_id.toString() === existingRecord.mentorid.toString()
+          });
+
+          return res.status(403).json({
+            success: false,
+            message: "You are not authorized to update mentor details"
+          });
+        }
+        console.log('Mentor authorization passed - proceeding with mentor update');
+      }
+
+      // === Skill update check ===
+      const skillFields = ["knownSkill", "skillSet"];
+      const tryingToUpdateSkills = skillFields.some(field => field in updateData);
+      let skillsChanged = false;
+
+      if (tryingToUpdateSkills && updateData.knownSkill !== undefined) {
+        const newKnownSkills = Array.isArray(updateData.knownSkill)
+          ? updateData.knownSkill.join(",")
+          : (updateData.knownSkill || "");
+
+        // Always allow staff to update knownSkill
+        updateData.knownSkill = newKnownSkills;
+        updateData.lastSkillUpdateBy = updatedBy;
+        updateData.skillUpdateTimestamp = new Date();
+        updateData.stuapprove = false;   // student needs to approve
+        updateData.staffapprove = true;  // staff has approved
+        skillsChanged = true;
+
+        console.log('Skills updated by staff:', {
+          newKnownSkills,
+          stuapprove: updateData.stuapprove,
+          staffapprove: updateData.staffapprove
+        });
+      }
+
+      // Ensure skillSet formatting
+      if (updateData.skillSet) {
+        updateData.skillSet = Array.isArray(updateData.skillSet)
+          ? updateData.skillSet.join(",")
+          : updateData.skillSet;
+      }
+
+      // Track who modified
+      if (req.user?.emp_id) {
+        updateData.modified_by = req.user.emp_id;
+      }
+
+      console.log('Final update data:', {
+        ...updateData,
+        skillsChanged,
+        skillApprovals: skillsChanged ? {
+          stuapprove: updateData.stuapprove,
+          staffapprove: updateData.staffapprove
+        } : 'No skill changes'
+      });
+
+      await StudentCourse.update(updateData, {
         where: { id },
         returning: true
       });
 
-      if (updatedRowsCount === 0) {
-        return res.status(404).json({
-          success: false,
-          message: 'Student course record not found'
-        });
-      }
-
-      // Fetch updated record
       const updatedRecord = await StudentCourse.findByPk(id);
+
+      console.log('Updated record details:', {
+        mentorid: updatedRecord.mentorid,
+        mentor: updatedRecord.mentor,
+        mentorNumber: updatedRecord.mentorNumber,
+        knownSkill: updatedRecord.knownSkill,
+        skillSet: updatedRecord.skillSet,
+        approvals: {
+          stuapprove: updatedRecord.stuapprove,
+          staffapprove: updatedRecord.staffapprove
+        }
+      });
+
+      const message = skillsChanged
+        ? "Student course record updated successfully. Skills are pending student approval."
+        : "Student course record updated successfully";
 
       res.json({
         success: true,
-        message: 'Student course record updated successfully',
-        data: updatedRecord
+        message,
+        skillsChanged,
+        updatedBy,
+        data: updatedRecord,
+        skillApprovals: skillsChanged ? {
+          stuapprove: updatedRecord.stuapprove,
+          staffapprove: updatedRecord.staffapprove
+        } : undefined
       });
     } catch (error) {
-      // Handle Sequelize validation errors
-      if (error.name === 'SequelizeValidationError') {
-        const validationErrors = error.errors.map(err => ({
-          field: err.path,
-          message: err.message
-        }));
-
-        return res.status(400).json({
-          success: false,
-          message: 'Validation error',
-          errors: validationErrors
-        });
-      }
-
+      console.error('Staff update error:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to update student course record',
+        message: "Failed to update student course record",
         error: error.message
       });
     }
   },
+
   getPlacementEligibleStudents: async (req, res) => {
     try {
       const {

@@ -8,6 +8,12 @@ const Placement = sequelize.define('Placement', {
     primaryKey: true,
   },
 
+  jobId: {                // Added jobId field
+    type: DataTypes.STRING,
+    allowNull: true,
+    unique: true,
+  },
+
   placementOfficerName: {
     type: DataTypes.STRING,
     allowNull: false,
@@ -68,6 +74,11 @@ const Placement = sequelize.define('Placement', {
     allowNull: false,
   },
 
+  bondDetails: {          // Added bondDetails field
+    type: DataTypes.TEXT,
+    allowNull: true,
+  },
+
   action: {
     type: DataTypes.STRING,
     allowNull: true,
@@ -87,6 +98,7 @@ const Placement = sequelize.define('Placement', {
     type: DataTypes.TEXT,
     allowNull: true,
   },
+  
   requirementIdentifiedDate: {
     type: DataTypes.DATEONLY,
     allowNull: true,

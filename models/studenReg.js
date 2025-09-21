@@ -268,6 +268,13 @@ const StudentRegistration = sequelize.define('StudentRegistration', {
     type: DataTypes.STRING,
     allowNull: true
   },
+  password: {
+  type: DataTypes.STRING,
+  allowNull: true, // Initially null, will be set after first login
+  validate: {
+    len: { args: [8, 100], msg: "Password should be between 8 and 100 characters" }
+  }
+},
  
 }, {
   tableName: 'student_registrations',

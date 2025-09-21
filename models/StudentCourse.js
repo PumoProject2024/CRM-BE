@@ -185,9 +185,9 @@ const StudentCourse = sequelize.define('StudentCourse', {
   mockTest3Score: { type: DataTypes.FLOAT, allowNull: true },
   courseStartDate: { type: DataTypes.DATEONLY, allowNull: true },
   courseEndDate: { type: DataTypes.DATEONLY, allowNull: true },
-  email_Id: {  type: DataTypes.STRING, allowNull: true},
-  desiredlocation:{ type: DataTypes.STRING, allowNull: true},
-   gender: {
+  email_Id: { type: DataTypes.STRING, allowNull: true },
+  desiredlocation: { type: DataTypes.STRING, allowNull: true },
+  gender: {
     type: DataTypes.STRING,
     allowNull: true
   },
@@ -215,19 +215,53 @@ const StudentCourse = sequelize.define('StudentCourse', {
     type: DataTypes.STRING,
     allowNull: true
   },
-     Department: {
-        type: DataTypes.STRING,
-        allowNull: true,
-    },
-  skillSet:{
+  Department: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  skillSet: {
     type: DataTypes.STRING,
     allowNull: true
   },
-   knownSkill:{
+  knownSkill: {
     type: DataTypes.STRING,
     allowNull: true
-  }
-  }, {
+  },
+  mentor: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  mentorid: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  mentorNumber: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  stuapprove: {
+  type: DataTypes.BOOLEAN,
+  allowNull: false,
+  defaultValue: true,
+  comment: 'Student approval status for skill updates'
+},
+staffapprove: {
+  type: DataTypes.BOOLEAN,
+  allowNull: false,
+  defaultValue: true,
+  comment: 'Staff approval status for skill updates'
+},
+lastSkillUpdateBy: {
+  type: DataTypes.STRING,
+  allowNull: true,
+  comment: 'Who last updated the skills (staff or student)'
+},
+skillUpdateTimestamp: {
+  type: DataTypes.DATE,
+  allowNull: true,
+  comment: 'When skills were last updated'
+},
+}, {
   tableName: 'student_courses',
   timestamps: true
 });

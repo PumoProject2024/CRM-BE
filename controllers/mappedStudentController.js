@@ -262,6 +262,70 @@ const mappedStudentController = {
     }
   },
 
+  updateStudentSelection: async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    const { studentId, isSelected, selectionFeedback } = req.body;
+
+    // Validate required fields
+    if (!studentId || isSelected === undefined || !selectionFeedback) {
+      return res.status(400).json({
+        success: false,
+        message: 'Student ID, selection status, and feedback are required'
+      });
+    }
+
+    // Find the mapping record
+    const mapping = await MappedStudent.findOne({
+      where: {
+        studentId: studentId,
+        companyId: companyId,
+        isAccepted: true, // Only for accepted offers
+        attended: true    // Only for students who attended the interview
+      }
+    });
+
+    if (!mapping) {
+      return res.status(404).json({
+        success: false,
+        message: 'Student record not found or student has not attended the interview yet'
+      });
+    }
+
+    // Update the selection status and feedback
+    const updateData = {
+      isSelected: isSelected,
+      selectionFeedback: selectionFeedback.trim(),
+      selectionUpdatedAt: new Date()
+    };
+
+    await mapping.update(updateData);
+
+    // Fetch updated record with student details for response
+    const updatedMapping = await MappedStudent.findOne({
+      where: { id: mapping.id },
+      include: [{
+        model: Student,
+        attributes: ['studentName', 'branch']
+      }]
+    });
+
+    res.json({
+      success: true,
+      message: `Student ${isSelected ? 'selected' : 'not selected'} successfully`,
+      data: updatedMapping
+    });
+
+  } catch (error) {
+    console.error('Error updating student selection:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update student selection status',
+      error: error.message
+    });
+  }
+},
+
   // Get student notifications
   getStudentNotifications: async (req, res) => {
     try {

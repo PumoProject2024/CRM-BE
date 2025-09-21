@@ -413,7 +413,7 @@ exports.getTrainerEmployees = async (req, res) => {
           })
         ]
       },
-      attributes: ["emp_id", "emp_name", "branch"]
+      attributes: ["emp_id", "emp_name", "branch","contact_num"]
     });
 
     res.status(200).json(employees.map(emp => emp.dataValues));
