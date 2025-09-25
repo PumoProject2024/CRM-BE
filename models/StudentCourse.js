@@ -199,6 +199,7 @@ const StudentCourse = sequelize.define('StudentCourse', {
     type: DataTypes.STRING,
     allowNull: true
   },
+  
   twelfthPassout: {
     type: DataTypes.STRING,
     allowNull: true
