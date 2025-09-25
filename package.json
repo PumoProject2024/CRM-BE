@@ -2,8 +2,10 @@
   "name": "pumo-be",
   "version": "1.0.0",
   "main": "index.js",
+  "bin": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+  "build": "pkg . --targets node18-win-x64,node18-linux-x64,node18-macos-x64 --output dist/pumo-be"
   },
   "keywords": [],
   "author": "",
@@ -23,5 +25,8 @@
     "pg-hstore": "^2.3.4",
     "sequelize": "^6.37.6",
     "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "pkg": "^5.8.1"
   }
 }

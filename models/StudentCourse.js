@@ -261,6 +261,27 @@ skillUpdateTimestamp: {
   allowNull: true,
   comment: 'When skills were last updated'
 },
+technologyRemarks:{
+   type: DataTypes.STRING,
+  allowNull: true,
+},
+communicationRemarks:{
+     type: DataTypes.STRING,
+  allowNull: true,
+},
+progressFeedback:{
+  type: DataTypes.STRING,
+  allowNull: true,
+},
+mockInterview:{
+  type: DataTypes.STRING,
+  allowNull: true,
+},
+mockRemarks:{
+  type: DataTypes.STRING,
+  allowNull: true,
+},
+
 }, {
   tableName: 'student_courses',
   timestamps: true
