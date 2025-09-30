@@ -23,7 +23,6 @@ app.use(compression());
 const path = require('path');
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-
 // Request logging middleware
 app.use((req, res, next) => {
     console.log(`Incoming request: ${req.method} ${req.url}`);
@@ -87,9 +86,9 @@ app.use((err, req, res, next) => {
 });
 
 // Start the server
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on port ${PORT}`);
-    console.log(`API available at http://localhost:${PORT}/api`);
+    console.log(`API available at http://0.0.0.0:${PORT}/api`);
 });
 
 // Handle unhandled promise rejections
