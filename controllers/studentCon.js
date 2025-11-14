@@ -1196,6 +1196,7 @@ class StudentRegistrationController {
   static async updateStudentProfile(req, res) {
     try {
       const { studentId } = req.params;
+
       const {
         name,
         email_Id,
@@ -1240,10 +1241,17 @@ class StudentRegistrationController {
         cgpa,
         Department,
         knownSkill,
-        skillSet
+        skillSet,
+
+        // Experience fields
+        experience,
+        expCompanyName1, expStartDate1, expEndDate1, expRole1, expTechnologies1, expCurrentlyWorking1,
+        expCompanyName2, expStartDate2, expEndDate2, expRole2, expTechnologies2, expCurrentlyWorking2,
+        expCompanyName3, expStartDate3, expEndDate3, expRole3, expTechnologies3, expCurrentlyWorking3
+
       } = req.body;
 
-      const updatedBy = 'student'; // studentAuthMiddleware
+      const updatedBy = 'student';
 
       // Authorization check
       if (req.student && req.student.studentId !== studentId) {
@@ -1259,13 +1267,16 @@ class StudentRegistrationController {
         return res.status(404).json({ success: false, message: 'Student not found.' });
       }
 
-      // Check if knownSkill was modified
-      const currentKnownSkills = currentRecord.knownSkill || '';
-      const newKnownSkills = Array.isArray(knownSkill) ? knownSkill.join(",") : (knownSkill || "");
+      // Skill update detection
+      const currentKnownSkills = currentRecord.knownSkill || "";
+      const newKnownSkills = Array.isArray(knownSkill)
+        ? knownSkill.join(",")
+        : (knownSkill || "");
+
       const skillsChanged = currentKnownSkills !== newKnownSkills;
 
-      // Update StudentRegistration
-      const [updatedRows] = await StudentRegistration.update({
+      // Update StudentRegistration table
+      await StudentRegistration.update({
         name,
         email_Id,
         contactNo,
@@ -1280,7 +1291,10 @@ class StudentRegistrationController {
         studentRequirement
       }, { where: { studentId } });
 
-      // Prepare update object for StudentCourse
+      // =======================
+      // BUILD StudentCourse UPDATE DATA
+      // =======================
+
       const courseUpdateData = {
         studentName: name,
         email_Id,
@@ -1315,13 +1329,43 @@ class StudentRegistrationController {
         pgPercentage,
         collegePassout,
         cgpa,
-        desiredlocation: Array.isArray(desiredlocation) ? desiredlocation.join(",") : (desiredlocation || ""),
-        skillSet: Array.isArray(skillSet) ? skillSet.join(",") : (skillSet || ""),
+        desiredlocation: Array.isArray(desiredlocation)
+          ? desiredlocation.join(",")
+          : (desiredlocation || ""),
+        skillSet: Array.isArray(skillSet)
+          ? skillSet.join(",")
+          : (skillSet || ""),
         Department,
+        experience,
+
+        // ========= EXPERIENCE ROW 1 =========
+        expCompanyName1,
+        expStartDate1: expStartDate1 || null,
+        expEndDate1: expCurrentlyWorking1 ? null : (expEndDate1 || null),
+        expRole1,
+        expTechnologies1,
+        expCurrentlyWorking1,
+
+        // ========= EXPERIENCE ROW 2 =========
+        expCompanyName2,
+        expStartDate2: expStartDate2 || null,
+        expEndDate2: expCurrentlyWorking2 ? null : (expEndDate2 || null),
+        expRole2,
+        expTechnologies2,
+        expCurrentlyWorking2,
+
+        // ========= EXPERIENCE ROW 3 =========
+        expCompanyName3,
+        expStartDate3: expStartDate3 || null,
+        expEndDate3: expCurrentlyWorking3 ? null : (expEndDate3 || null),
+        expRole3,
+        expTechnologies3,
+        expCurrentlyWorking3,
+
         modified_by: req.student?.studentId
       };
 
-      // Handle skill approval
+      // Handle SKILL APPROVAL LOGIC
       if (skillsChanged) {
         courseUpdateData.knownSkill = newKnownSkills;
         courseUpdateData.lastSkillUpdateBy = updatedBy;
@@ -1330,7 +1374,7 @@ class StudentRegistrationController {
         courseUpdateData.staffapprove = false;
       }
 
-      // Update StudentCourse
+      // Save to StudentCourse
       await StudentCourse.update(courseUpdateData, { where: { studentId } });
 
       return res.status(200).json({
@@ -1340,12 +1384,14 @@ class StudentRegistrationController {
           : 'Student profile updated successfully.',
         skillsChanged,
         updatedBy,
-        updatedFields: skillsChanged ? {
-          skillSet: courseUpdateData.skillSet,
-          knownSkill: courseUpdateData.knownSkill,
-          stuapprove: courseUpdateData.stuapprove,
-          staffapprove: courseUpdateData.staffapprove
-        } : null
+        updatedFields: skillsChanged
+          ? {
+            skillSet: courseUpdateData.skillSet,
+            knownSkill: courseUpdateData.knownSkill,
+            stuapprove: courseUpdateData.stuapprove,
+            staffapprove: courseUpdateData.staffapprove
+          }
+          : null
       });
 
     } catch (error) {
@@ -1571,7 +1617,20 @@ class StudentRegistrationController {
           'knownSkill',
           'mentor',
           'mentorid',
-          'mentorNumber'
+          'mentorNumber',
+          'placementStatus',
+          'companyName',
+          'companyLocation',
+          'joiningDate',
+          'jobRole',
+          'placedBy',
+          'package',
+          'placementDate',
+          'experience',
+          'expCompanyName1', 'expStartDate1', 'expEndDate1', 'expRole1', 'expTechnologies1', 'expCurrentlyWorking1',
+          'expCompanyName2', 'expStartDate2', 'expEndDate2', 'expRole2', 'expTechnologies2', 'expCurrentlyWorking2',
+          'expCompanyName3', 'expStartDate3', 'expEndDate3', 'expRole3', 'expTechnologies3', 'expCurrentlyWorking3'
+
         ]
       });
 

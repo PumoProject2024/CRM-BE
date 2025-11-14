@@ -355,8 +355,60 @@ const StudentCourse = sequelize.define('StudentCourse', {
   pgPercentage: {
     type: DataTypes.STRING,
     allowNull: true
-  }
+  },
+  placementStatus: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  companyName: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  companyLocation: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  joiningDate: {
+    type: DataTypes.DATEONLY,
+    allowNull: true,
+  },
+  jobRole: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  placedBy: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  package: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+  },
+  placementDate: {
+    type: DataTypes.DATEONLY,
+    allowNull: true,
+  },
 
+  expCompanyName1: { type: DataTypes.STRING, allowNull: true },
+  expStartDate1: { type: DataTypes.DATEONLY, allowNull: true },
+  expEndDate1: { type: DataTypes.DATEONLY, allowNull: true },
+  expRole1: { type: DataTypes.STRING, allowNull: true },
+  expTechnologies1: { type: DataTypes.STRING, allowNull: true },
+  expCurrentlyWorking1: { type: DataTypes.BOOLEAN, allowNull: true },
+
+  expCompanyName2: { type: DataTypes.STRING, allowNull: true },
+  expStartDate2: { type: DataTypes.DATEONLY, allowNull: true },
+  expEndDate2: { type: DataTypes.DATEONLY, allowNull: true },
+  expRole2: { type: DataTypes.STRING, allowNull: true },
+  expTechnologies2: { type: DataTypes.STRING, allowNull: true },
+  expCurrentlyWorking2: { type: DataTypes.BOOLEAN, allowNull: true },
+
+  expCompanyName3: { type: DataTypes.STRING, allowNull: true },
+  expStartDate3: { type: DataTypes.DATEONLY, allowNull: true },
+  expEndDate3: { type: DataTypes.DATEONLY, allowNull: true },
+  expRole3: { type: DataTypes.STRING, allowNull: true },
+  expTechnologies3: { type: DataTypes.STRING, allowNull: true },
+  expCurrentlyWorking3: { type: DataTypes.BOOLEAN, allowNull: true },
 }, {
   tableName: 'student_courses',
   timestamps: true
