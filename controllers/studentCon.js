@@ -932,7 +932,7 @@ class StudentRegistrationController {
       if (!student) {
         return res.status(404).json({
           success: false,
-          message: 'Student not found with this email',
+          message: 'Student/Staff not found with this email',
         });
       }
 

@@ -183,7 +183,7 @@ ${notFoundFiles.map(f => `- ${f.name} (${f.studentId})`).join('\n')}`
 // Download all resumes (for admin use)
 const downloadAllResumes = async (req, res) => {
   try {
-    // --- read same query params as excel export ---
+    // --- Read same query params as main controller ---
     const {
       departments,
       skillsKnown,
@@ -206,114 +206,134 @@ const downloadAllResumes = async (req, res) => {
       searchValue,
     } = req.query;
 
-    // --- Build the same whereClause as Excel export ---
+    // --- Base condition: Only students who need placement ---
     const whereClause = {
       readyForPlacement: "Yes"
     };
 
-    // departments
+    // Department filter
     if (departments) {
-      const departmentArray = departments.split(',').map(d => d.trim());
+      const departmentArray = departments.split(',').map(dept => dept.trim());
       whereClause.Department = { [Op.in]: departmentArray };
     }
 
-    // skillsKnown
+    // ================================================
+    // 🔥 UPDATED: Skills filter (exact match with regex)
+    // ================================================
     if (skillsKnown) {
-      const skillsArray = skillsKnown.split(',').map(s => s.trim());
-      const skillConditions = skillsArray.map(skill => ({
-        knownSkill: { [Op.iLike]: `%${skill}%` }
-      }));
+      const skillsArray = skillsKnown.split(',').map(skill => skill.trim().toLowerCase());
 
-      if (whereClause[Op.or]) {
-        whereClause[Op.and] = [
-          { [Op.or]: whereClause[Op.or] },
-          { [Op.or]: skillConditions }
-        ];
-        delete whereClause[Op.or];
+      const skillConditions = skillsArray.map(skill =>
+        Sequelize.where(
+          Sequelize.fn('LOWER', Sequelize.col('knownSkill')),
+          {
+            [Op.regexp]: `(^|,)\\s*${skill.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*(,|$)`
+          }
+        )
+      );
+
+      if (whereClause[Op.and]) {
+        whereClause[Op.and].push(...skillConditions);
       } else {
-        whereClause[Op.or] = skillConditions;
+        whereClause[Op.and] = skillConditions;
       }
     }
 
-    // courses (new)
+    // Legacy: course filters
     if (courses) {
       const coursesArray = courses.split(',').map(c => c.trim());
       whereClause.courseName = { [Op.in]: coursesArray };
     }
 
-    // legacy course filters if courses not provided
     if (!courses) {
       if (courseTypes) {
-        const courseTypeArray = courseTypes.split(',').map(c => c.trim());
-        whereClause.courseType = { [Op.in]: courseTypeArray };
+        const arr = courseTypes.split(',').map(v => v.trim());
+        whereClause.courseType = { [Op.in]: arr };
       } else if (courseType) {
         whereClause.courseType = courseType;
       }
 
       if (courseNames) {
-        const courseNameArray = courseNames.split(',').map(c => c.trim());
-        whereClause.courseName = { [Op.in]: courseNameArray };
+        const arr = courseNames.split(',').map(v => v.trim());
+        whereClause.courseName = { [Op.in]: arr };
       } else if (courseName) {
         whereClause.courseName = courseName;
       }
     }
 
-    // branches
+    // Branch filter
     if (branches) {
-      const branchArray = branches.split(',').map(b => b.trim());
-      whereClause.branch = { [Op.in]: branchArray };
+      const arr = branches.split(',').map(b => b.trim());
+      whereClause.branch = { [Op.in]: arr };
     } else if (branch) {
       whereClause.branch = branch;
     }
 
-    // companyLocations — build OR conditions including 'No Constraint'
+    // ================================================
+    // 🔥 UPDATED: Company location filter (with "No Constraint")
+    // ================================================
     if (companyLocations) {
-      const locationArray = companyLocations.split(',').map(l => l.trim());
+      const arr = companyLocations.split(',').map(v => v.trim());
+      const locConditions = [
+        { desiredlocation: { [Op.iLike]: '%No Constraint%' } },
+        ...arr.map(loc => ({
+          desiredlocation: { [Op.iLike]: `%${loc}%` }
+        }))
+      ];
 
-      if (locationArray.length > 0) {
-        const locationConditions = [
-          { desiredlocation: { [Op.iLike]: '%No Constraint%' } },
-          ...locationArray.map(location => ({
-            desiredlocation: { [Op.iLike]: `%${location}%` }
-          }))
+      if (whereClause[Op.or]) {
+        whereClause[Op.and] = [
+          { [Op.or]: whereClause[Op.or] },
+          { [Op.or]: locConditions }
         ];
-
-        if (whereClause[Op.or]) {
-          whereClause[Op.and] = [
-            { [Op.or]: whereClause[Op.or] },
-            { [Op.or]: locationConditions }
-          ];
-          delete whereClause[Op.or];
-        } else if (whereClause[Op.and]) {
-          whereClause[Op.and].push({ [Op.or]: locationConditions });
-        } else {
-          whereClause[Op.or] = locationConditions;
-        }
+      } else if (whereClause[Op.and]) {
+        whereClause[Op.and].push({ [Op.or]: locConditions });
+      } else {
+        whereClause[Op.or] = locConditions;
       }
     }
 
-    // experiences
+    // Experience filter
     if (experiences) {
-      const experienceArray = experiences.split(',').map(e => e.trim());
-      whereClause.experience = { [Op.in]: experienceArray };
+      const arr = experiences.split(',').map(v => v.trim());
+      whereClause.experience = { [Op.in]: arr };
     }
 
-    // single filters
+    // Single filters
     if (batch) whereClause.batch = batch;
     if (learningMode) whereClause.learningMode = learningMode;
 
-    // search
+    // Search
     if (searchField && searchValue) {
       whereClause[searchField] = { [Op.iLike]: `%${searchValue}%` };
     }
 
-    // Debug log (optional)
+    // Debug log
     console.log('Resume ZIP whereClause:', JSON.stringify(whereClause, null, 2));
 
-    // --- Query StudentCourse with same filters ---
+    // ============================================
+    // Custom sort function (same as other controllers)
+    // ============================================
+    const customSort = (a, b) => {
+      // First: branch
+      const branchCompare = (a.branch || '').localeCompare(b.branch || '');
+      if (branchCompare !== 0) return branchCompare;
+
+      // Second: ProgressStatus priority (Course Completed first)
+      const statusA = a.ProgressStatus || '';
+      const statusB = b.ProgressStatus || '';
+
+      if (statusA === 'Course Completed' && statusB !== 'Course Completed') return -1;
+      if (statusA !== 'Course Completed' && statusB === 'Course Completed') return 1;
+
+      // Third: Alphabetical sort of status
+      return statusA.localeCompare(statusB);
+    };
+
+    // --- Query StudentCourse with filters (no DB sorting) ---
     const studentCourseResults = await StudentCourse.findAll({
       where: whereClause,
-      order: [['id', 'DESC']]
+      order: [] // custom sorting applied below
     });
 
     if (!studentCourseResults || studentCourseResults.length === 0) {
@@ -323,10 +343,15 @@ const downloadAllResumes = async (req, res) => {
       });
     }
 
-    // extract studentIds from course results
+    // Apply custom sort
+    studentCourseResults.sort(customSort);
+
+    // Extract studentIds from course results
     const studentIds = studentCourseResults.map(r => r.studentId);
 
-    // --- Build registrationWhereClause (pending fees + resumeStatus) ---
+    // ================================================
+    // 🔥 UPDATED: Registration filter (same as main controller)
+    // ================================================
     const registrationWhereClause = {
       studentId: { [Op.in]: studentIds },
       [Op.and]: [
@@ -357,7 +382,7 @@ const downloadAllResumes = async (req, res) => {
       ]
     };
 
-    // resumeStatus handling (same as Excel)
+    // Resume status handling (same as main controller)
     if (resumeStatus) {
       if (resumeStatus === 'uploaded') {
         registrationWhereClause.resumePath = {
@@ -374,22 +399,37 @@ const downloadAllResumes = async (req, res) => {
       }
     }
 
-    // Add educationCourse search filter if provided (Excel had this)
+    // Add educationCourse search filter if provided
     if (searchField === 'educationCourse' && searchValue) {
       registrationWhereClause.educationCourse = { [Op.iLike]: `%${searchValue}%` };
     }
 
-    // fetch registration rows matching the fees+resume filters
+    // Fetch registration rows matching the fees+resume filters
     const registrationData = await StudentRegistration.findAll({
       where: registrationWhereClause,
-      attributes: ['studentId', 'resumePath', 'educationCourse', 'pendingFees', 'pendingFees2', 'pendingFees3', 'pendingFees4']
+      attributes: [
+        'studentId',
+        'resumePath',
+        'educationCourse',
+        'pendingFees',
+        'pendingFees2',
+        'pendingFees3',
+        'pendingFees4'
+      ]
     });
 
-    // eligible student IDs after registration-level filtering
+    // Eligible student IDs after registration-level filtering
     const eligibleStudentIds = new Set(registrationData.map(r => r.studentId));
 
-    // filter StudentCourse rows to include only eligible students
-    const filteredStudentCourseResults = studentCourseResults.filter(row => eligibleStudentIds.has(row.studentId));
+    // Filter StudentCourse rows to include only eligible students
+    let filteredStudentCourseResults = studentCourseResults.filter(row => 
+      eligibleStudentIds.has(row.studentId)
+    );
+
+    // ============================================
+    // Re-apply custom sort after filtering
+    // ============================================
+    filteredStudentCourseResults.sort(customSort);
 
     if (filteredStudentCourseResults.length === 0) {
       return res.status(404).json({
@@ -404,7 +444,12 @@ const downloadAllResumes = async (req, res) => {
     const studentsWithResume = await StudentRegistration.findAll({
       where: {
         studentId: { [Op.in]: filteredStudentIds },
-        resumePath: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] }
+        resumePath: { 
+          [Op.and]: [
+            { [Op.ne]: null }, 
+            { [Op.ne]: '' }
+          ] 
+        }
       },
       attributes: ['studentId', 'resumePath', 'name', 'department', 'adminbranch']
     });
@@ -477,7 +522,7 @@ ${notFoundFiles.length > 0 ? `Missing files:\n${notFoundFiles.map(f => `- ${f.na
 
     archive.append(summaryContent, { name: 'download_summary.txt' });
 
-    // finalize
+    // Finalize the archive
     await archive.finalize();
 
   } catch (error) {

@@ -203,7 +203,7 @@ const studentCourseController = {
       const studentIds = rows.map(row => row.studentId);
       const registrationData = await StudentRegistration.findAll({
         where: { studentId: { [Op.in]: studentIds } },
-        attributes: ['studentId', 'resumePath', 'educationCourse'],
+        attributes: ['studentId', 'resumePath', 'educationCourse', 'dob', 'ParentNo', 'address'],
       });
 
       // Map resume data for easy lookup
@@ -289,14 +289,10 @@ const studentCourseController = {
       // Role-based access check
       let authorized = false;
 
-      if (role === 'Super-Admin') {
-        authorized = true; // full access
-      }
-      else if (role === 'Placement officer') {
-        authorized = true; // full access
+      if (role === 'Super-Admin' || role === 'Placement officer') {
+        authorized = true;
       }
       else if (role === 'Branch-head') {
-        // Check if record branch matches user's branch access
         if (Array.isArray(userBranch) && userBranch.includes(record.branch)) {
           authorized = true;
         } else if (record.branch === userBranch) {
@@ -304,7 +300,6 @@ const studentCourseController = {
         }
       }
       else if (role === 'Trainer') {
-        // Trainer can access only their assigned students
         if (
           (record.staffId1 === empIdStr && record.staffName1 === emp_name) ||
           (record.staffId2 === empIdStr && record.staffName2 === emp_name) ||
@@ -322,7 +317,7 @@ const studentCourseController = {
         });
       }
 
-      // Exclude placed/completed students (same as getAll)
+      // Exclude placed/completed
       const excludedStatuses = ['Course Completed, Certified, and Successfully Placed'];
       if (excludedStatuses.includes(record.ProgressStatus)) {
         return res.status(403).json({
@@ -331,11 +326,29 @@ const studentCourseController = {
         });
       }
 
-      // Send response
-      res.json({
+      // ⭐ Fetch from StudentRegistration
+      const registration = await StudentRegistration.findOne({
+        where: { studentId: record.studentId },
+        attributes: [
+          'studentId',
+          'name',
+          'email_Id',
+          'contactNo',
+          'ParentNo',
+          'address',
+          'dob',
+          'educationCourse',
+          'resumePath'
+        ]
+      });
+
+      return res.json({
         success: true,
         message: 'Student course record fetched successfully',
-        data: record,
+        data: {
+          courseDetails: record,
+          studentRegistration: registration || null
+        }
       });
 
     } catch (error) {
@@ -347,6 +360,7 @@ const studentCourseController = {
       });
     }
   },
+
 
   getAllByMentor: async (req, res) => {
     try {
@@ -738,7 +752,9 @@ const studentCourseController = {
       const dateFields = [
         'courseStartDate', 'courseEndDate',
         'tenthPassout', 'twelfthPassout',
-        'diplomaPassout', 'ugPassout', 'pgPassout', 'joiningDate', 'placementDate',
+        'diplomaPassout', 'ugPassout', 'pgPassout', 'joiningDate', 'placementDate', 'expStartDate1', 'expEndDate1',
+        'expStartDate2', 'expEndDate2',
+        'expStartDate3', 'expEndDate3'
       ];
 
       dateFields.forEach(field => {
@@ -820,35 +836,30 @@ const studentCourseController = {
   getPlacementEligibleStudents: async (req, res) => {
     try {
       const {
-        // Multi-select filters from frontend
         departments,
         skillsKnown,
         branches,
         companyLocations,
         experiences,
         resumeStatus,
-        // Legacy course filters (keeping for backward compatibility)
         courseTypes,
         courseNames,
         courseType,
         courseName,
-        // Single filters (keeping for backward compatibility)
         batch,
         learningMode,
         branch,
-        // Search parameters
         searchField,
         searchValue,
-        // Pagination
         page = 1,
         limit = 10,
         sortBy = "branch",
         sortOrder = "ASC"
       } = req.query;
 
-      // Base condition: Only students who need placement
       const whereClause = {
-        readyForPlacement: "Yes"
+        readyForPlacement: "Yes",
+        placementStatus: { [Op.ne]: "Placed" }  // 👈 NEW CONDITION
       };
 
       // Department filter
@@ -857,7 +868,266 @@ const studentCourseController = {
         whereClause.Department = { [Op.in]: departmentArray };
       }
 
-      // Skills filter
+      // Skills filter (REGEXP)
+      if (skillsKnown) {
+        const skillsArray = skillsKnown.split(",").map(skill => skill.trim().toLowerCase());
+        const skillConditions = skillsArray.map(skill =>
+          Sequelize.where(
+            Sequelize.fn("LOWER", Sequelize.col("knownSkill")),
+            {
+              [Op.regexp]: `(^|,)\\s*${skill.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*(,|$)`
+            }
+          )
+        );
+
+        if (whereClause[Op.and]) whereClause[Op.and].push(...skillConditions);
+        else whereClause[Op.and] = skillConditions;
+      }
+
+      // Legacy: course filters
+      if (req.query.courses) {
+        whereClause.courseName = {
+          [Op.in]: req.query.courses.split(",").map(x => x.trim())
+        };
+      }
+
+      if (!req.query.courses) {
+        if (courseTypes) {
+          whereClause.courseType = { [Op.in]: courseTypes.split(",").map(x => x.trim()) };
+        } else if (courseType) whereClause.courseType = courseType;
+
+        if (courseNames) {
+          whereClause.courseName = { [Op.in]: courseNames.split(",").map(x => x.trim()) };
+        } else if (courseName) whereClause.courseName = courseName;
+      }
+
+      // Branch filter
+      if (branches) {
+        whereClause.branch = { [Op.in]: branches.split(",").map(x => x.trim()) };
+      } else if (branch) {
+        whereClause.branch = branch;
+      }
+
+      // Desired location filter
+      if (companyLocations) {
+        const arr = companyLocations.split(",").map(v => v.trim());
+        const locConditions = [
+          { desiredlocation: { [Op.iLike]: "%No Constraint%" } },
+          ...arr.map(loc => ({ desiredlocation: { [Op.iLike]: `%${loc}%` } }))
+        ];
+
+        if (whereClause[Op.or]) {
+          whereClause[Op.and] = [
+            { [Op.or]: whereClause[Op.or] },
+            { [Op.or]: locConditions }
+          ];
+        } else if (whereClause[Op.and]) {
+          whereClause[Op.and].push({ [Op.or]: locConditions });
+        } else {
+          whereClause[Op.or] = locConditions;
+        }
+      }
+
+      // Experience
+      if (experiences) {
+        whereClause.experience = { [Op.in]: experiences.split(",").map(x => x.trim()) };
+      }
+
+      // Single filters
+      if (batch) whereClause.batch = batch;
+      if (learningMode) whereClause.learningMode = learningMode;
+
+      // Search
+      if (searchField && searchValue) {
+        whereClause[searchField] = { [Op.iLike]: `%${searchValue}%` };
+      }
+
+      // Pagination
+      const pageNumber = parseInt(page) || 1;
+      const pageSize = parseInt(limit) || 10;
+      const offset = (pageNumber - 1) * pageSize;
+
+      // Allowed sort fields
+      const allowedSortFields = [
+        "id", "courseType", "courseName", "batch",
+        "learningMode", "createdAt", "updatedAt", "branch"
+      ];
+
+      const sortField = allowedSortFields.includes(sortBy) ? sortBy : "branch";
+      const sortDirection = ["ASC", "DESC"].includes(sortOrder.toUpperCase())
+        ? sortOrder.toUpperCase()
+        : "ASC";
+
+      // ====== FETCH FROM DB (no sorting here) ======
+      const studentCourseResults = await StudentCourse.findAll({
+        where: whereClause,
+        order: sortBy === "branch" ? [] : [[sortField, sortDirection]]
+      });
+
+      if (studentCourseResults.length === 0) {
+        return res.json({
+          success: true,
+          data: [],
+          pagination: {
+            currentPage: pageNumber,
+            totalPages: 0,
+            totalRecords: 0,
+            recordsOnCurrentPage: 0,
+            recordsPerPage: pageSize,
+            hasNextPage: false,
+            hasPrevPage: false
+          }
+        });
+      }
+
+      // ⭐ ADD ORIGINAL INDEX FOR STABLE SORT
+      studentCourseResults.forEach((item, index) => {
+        item.originalIndex = index;
+      });
+
+      // ⭐ STABLE SORT LOGIC
+      const customSort = (a, b) => {
+        const branchCompare = (a.branch || "").localeCompare(b.branch || "");
+        if (branchCompare !== 0) return branchCompare;
+
+        const aCompleted = a.ProgressStatus === "Course Completed";
+        const bCompleted = b.ProgressStatus === "Course Completed";
+
+        if (aCompleted && !bCompleted) return -1;
+        if (!aCompleted && bCompleted) return 1;
+
+        const statusCompare = (a.ProgressStatus || "").localeCompare(b.ProgressStatus || "");
+        if (statusCompare !== 0) return statusCompare;
+
+        return a.originalIndex - b.originalIndex; // ⭐ stable fallback
+      };
+
+      // Apply stable sorting
+      if (sortBy === "branch") {
+        studentCourseResults.sort(customSort);
+      }
+
+      // Registration filtering
+      const studentIds = studentCourseResults.map(r => r.studentId);
+
+      const registrationWhereClause = {
+        studentId: { [Op.in]: studentIds },
+        [Op.and]: [
+          { pendingFees: { [Op.or]: [null, 0] } },
+          { pendingFees2: { [Op.or]: [null, 0] } },
+          { pendingFees3: { [Op.or]: [null, 0] } },
+          { pendingFees4: { [Op.or]: [null, 0] } }
+        ]
+      };
+
+      if (resumeStatus === "uploaded") {
+        registrationWhereClause.resumePath = { [Op.ne]: null };
+      } else if (resumeStatus === "not_uploaded") {
+        registrationWhereClause[Op.or] = [
+          { resumePath: { [Op.is]: null } },
+          { resumePath: "" }
+        ];
+      }
+
+      if (searchField === "educationCourse" && searchValue) {
+        registrationWhereClause.educationCourse = { [Op.iLike]: `%${searchValue}%` };
+      }
+
+      const registrationData = await StudentRegistration.findAll({
+        where: registrationWhereClause,
+        attributes: [
+          "studentId",
+          "resumePath",
+          "educationCourse",
+          "pendingFees",
+          "pendingFees2",
+          "pendingFees3",
+          "pendingFees4"
+        ]
+      });
+
+      const eligibleStudentIds = new Set(registrationData.map(r => r.studentId));
+
+      const filteredStudentCourseResults = studentCourseResults.filter(r =>
+        eligibleStudentIds.has(r.studentId)
+      );
+
+      // ⭐ reapply stable sorting
+      if (sortBy === "branch") {
+        filteredStudentCourseResults.sort(customSort);
+      }
+
+      const totalRecords = filteredStudentCourseResults.length;
+      const paginatedResults = filteredStudentCourseResults.slice(offset, offset + pageSize);
+
+      const regMap = registrationData.reduce((acc, r) => {
+        acc[r.studentId] = r.toJSON();
+        return acc;
+      }, {});
+
+      const enrichedRows = paginatedResults.map(row => ({
+        ...row.toJSON(),
+        studentRegistration: regMap[row.studentId] || null
+      }));
+
+      return res.json({
+        success: true,
+        data: enrichedRows,
+        pagination: {
+          currentPage: pageNumber,
+          totalPages: Math.ceil(totalRecords / pageSize),
+          totalRecords,
+          recordsOnCurrentPage: enrichedRows.length,
+          recordsPerPage: pageSize,
+          hasNextPage: pageNumber < Math.ceil(totalRecords / pageSize),
+          hasPrevPage: pageNumber > 1
+        }
+      });
+
+    } catch (error) {
+      console.error("Error in getPlacementEligibleStudents:", error);
+      res.status(500).json({
+        success: false,
+        message: "Failed to fetch placement eligible students",
+        error: error.message
+      });
+    }
+  },
+
+
+  getPlacementEligibleStudentsExcel: async (req, res) => {
+    try {
+      const {
+        departments,
+        skillsKnown,
+        branches,
+        companyLocations,
+        experiences,
+        resumeStatus,
+        courses,
+        courseTypes,
+        courseNames,
+        courseType,
+        courseName,
+        batch,
+        learningMode,
+        branch,
+        searchField,
+        searchValue,
+      } = req.query;
+
+      // Base condition
+      const whereClause = { readyForPlacement: "Yes" };
+
+      // Department filter
+      if (departments) {
+        const departmentArray = departments.split(",").map(dept => dept.trim());
+        whereClause.Department = { [Op.in]: departmentArray };
+      }
+
+      // ================================================
+      // 🔥 UPDATED: Skills filter (same as main controller)
+      // ================================================
       if (skillsKnown) {
         const skillsArray = skillsKnown.split(",").map(skill => skill.trim().toLowerCase());
 
@@ -878,12 +1148,11 @@ const studentCourseController = {
       }
 
       // Legacy: course filters
-      if (req.query.courses) {
-        const coursesArray = req.query.courses.split(",").map(c => c.trim());
-        whereClause.courseName = { [Op.in]: coursesArray };
+      if (courses) {
+        whereClause.courseName = { [Op.in]: courses.split(",").map(c => c.trim()) };
       }
 
-      if (!req.query.courses) {
+      if (!courses) {
         if (courseTypes) {
           const arr = courseTypes.split(",").map(v => v.trim());
           whereClause.courseType = { [Op.in]: arr };
@@ -907,7 +1176,9 @@ const studentCourseController = {
         whereClause.branch = branch;
       }
 
-      // Company location filter
+      // ================================================
+      // 🔥 UPDATED: Company location filter (same as main controller)
+      // ================================================
       if (companyLocations) {
         const arr = companyLocations.split(",").map(v => v.trim());
         const locConditions = [
@@ -944,32 +1215,27 @@ const studentCourseController = {
         whereClause[searchField] = { [Op.iLike]: `%${searchValue}%` };
       }
 
-      // Pagination variables
-      const pageNumber = parseInt(page) || 1;
-      const pageSize = parseInt(limit) || 10;
-      const offset = (pageNumber - 1) * pageSize;
+      console.log("Excel whereClause:", whereClause);
 
-      // ================================================
-      // 1. NEW SORTING LOGIC (Your Update)
-      // ================================================
-      const allowedSortFields = [
-        "id",
-        "courseType",
-        "courseName",
-        "batch",
-        "learningMode",
-        "createdAt",
-        "updatedAt",
-        "branch"
-      ];
+      // ============================================
+      // Fetch StudentCourse data without DB ordering
+      // ============================================
+      const studentCourseResults = await StudentCourse.findAll({
+        where: whereClause,
+        order: [] // custom sorting applied below
+      });
 
-      const sortField = allowedSortFields.includes(sortBy) ? sortBy : "branch";
-      const sortDirection = ["ASC", "DESC"].includes(sortOrder.toUpperCase())
-        ? sortOrder.toUpperCase()
-        : "ASC";
+      if (!studentCourseResults.length) {
+        return res.status(404).json({
+          success: false,
+          message: "No eligible students found"
+        });
+      }
 
-      // Custom sort handler
-      const customSort = (a, b) => {
+      // ============================================
+      // Custom sort function
+      // ============================================
+      const customExcelSort = (a, b) => {
         // First: branch
         const branchCompare = (a.branch || "").localeCompare(b.branch || "");
         if (branchCompare !== 0) return branchCompare;
@@ -985,38 +1251,15 @@ const studentCourseController = {
         return statusA.localeCompare(statusB);
       };
 
-      // First query - without DB sorting (custom sort applied later)
-      const studentCourseResults = await StudentCourse.findAll({
-        where: whereClause,
-        order: sortBy === "branch" || !sortBy ? [] : [[sortField, sortDirection]]
-      });
+      // Apply initial sort
+      studentCourseResults.sort(customExcelSort);
 
-      // If sorting by branch or default, apply custom sorting
-      if (sortBy === "branch" || !sortBy) {
-        studentCourseResults.sort(customSort);
-      }
-
-      if (studentCourseResults.length === 0) {
-        return res.json({
-          success: true,
-          data: [],
-          pagination: {
-            currentPage: pageNumber,
-            totalPages: 0,
-            totalRecords: 0,
-            recordsOnCurrentPage: 0,
-            recordsPerPage: pageSize,
-            hasNextPage: false,
-            hasPrevPage: false
-          }
-        });
-      }
+      // Map studentIds
+      const studentIds = studentCourseResults.map(s => s.studentId);
 
       // ================================================
-      // 2. REGISTRATION CHECK — pending fees + resume filter
+      // 🔥 UPDATED: Registration filter (same as main controller)
       // ================================================
-      const studentIds = studentCourseResults.map(r => r.studentId);
-
       const registrationWhereClause = {
         studentId: { [Op.in]: studentIds },
         [Op.and]: [
@@ -1073,358 +1316,754 @@ const studentCourseController = {
           "pendingFees",
           "pendingFees2",
           "pendingFees3",
-          "pendingFees4"
+          "pendingFees4",
         ]
       });
 
       const eligibleStudentIds = new Set(registrationData.map(r => r.studentId));
 
       // Filter StudentCourse results
-      const filteredStudentCourseResults = studentCourseResults.filter(r =>
-        eligibleStudentIds.has(r.studentId)
+      let filteredStudentCourseResults = studentCourseResults.filter(s =>
+        eligibleStudentIds.has(s.studentId)
       );
 
-      // ================================================
-      // RE-APPLY custom sort before pagination
-      // ================================================
-      filteredStudentCourseResults.sort(customSort);
-
-      const totalRecords = filteredStudentCourseResults.length;
-      const paginatedResults = filteredStudentCourseResults.slice(offset, offset + pageSize);
+      // ============================================
+      // Re-apply custom sort after filtering
+      // ============================================
+      filteredStudentCourseResults.sort(customExcelSort);
 
       // Map registration data
+      const regMap = {};
+      registrationData.forEach(r => (regMap[r.studentId] = r.toJSON()));
+
+      // ============================================
+      // Final export columns
+      // ============================================
+      const combinedColumns = [
+        "studentName",
+        "branch",
+        "educationQualification",
+        "passedOutYear",
+        "experience",
+        "Department",
+        "knownSkill",
+        "courseName",
+        "ProgressStatus",
+        "desiredlocation",
+        "technicalScore",
+        "technologyRemarks",
+        "communicationScore",
+        "communicationRemarks",
+        "mockInterview",
+        "mockRemarks",
+        "project1Score",
+        "project2Score",
+        "project3Score",
+        "mockTest1Score",
+        "mockTest2Score",
+        "mockTest3Score",
+        "courseStartDate",
+        "courseEndDate",
+        "studentContactNumber",
+        "email_Id",
+        "gender",
+        "mentor",
+        "mentorNumber",
+      ];
+
+      // Custom header names
+      const customHeaderNames = {
+        educationQualification: "Education Qualification",
+        passedOutYear: "Passed Out Year",
+        mockRemarks: "Mock Interview Remarks",
+        experience: "Working Experience"
+      };
+
+      const prettifyHeader = key =>
+        key
+          .replace(/([A-Z])/g, " $1")
+          .replace(/_/g, " ")
+          .replace(/\b\w/g, l => l.toUpperCase())
+          .trim();
+
+      // Join course & registration data
+      const rows = filteredStudentCourseResults.map(row => ({
+        ...row.toJSON(),
+        ...regMap[row.studentId]
+      }));
+
+      // Create Excel workbook
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet("Placement Eligible Students");
+
+      worksheet.columns = combinedColumns.map(key => ({
+        header: customHeaderNames[key] || prettifyHeader(key),
+        key,
+        width: 25
+      }));
+
+      rows.forEach(row => {
+        const rowData = {};
+
+        combinedColumns.forEach(col => {
+          if (col === "educationQualification") {
+            const diploma = row.diplomaDegree ?? "";
+            const ug = row.ugDegree ?? "";
+            const pg = row.pgDegree ?? "";
+
+            rowData[col] = [diploma, ug, pg]
+              .filter(v => v && v !== "N/A")
+              .join(", ");
+          } else if (col === "passedOutYear") {
+            const dip = row.diplomaPassout ?? "";
+            const ug = row.ugPassout ?? "";
+            const pg = row.pgPassout ?? "";
+
+            rowData[col] = [dip, ug, pg]
+              .filter(v => v && v !== "N/A")
+              .join(", ");
+          } else {
+            rowData[col] = row[col] && row[col] !== "N/A" ? row[col] : "";
+          }
+        });
+
+        worksheet.addRow(rowData);
+      });
+
+      // Header styling
+      const headerRow = worksheet.getRow(1);
+      headerRow.font = { bold: true, color: { argb: "FFFFFFFF" } };
+      headerRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF4472C4" } };
+      headerRow.alignment = { horizontal: "center", vertical: "middle" };
+
+      // Add borders to all cells
+      worksheet.eachRow(row => {
+        row.eachCell(cell => {
+          cell.border = {
+            top: { style: "thin" },
+            left: { style: "thin" },
+            bottom: { style: "thin" },
+            right: { style: "thin" }
+          };
+        });
+      });
+
+      // Set response headers
+      res.setHeader(
+        "Content-Type",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      );
+
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="Placement_Eligible_${new Date().toISOString().split("T")[0]}.xlsx"`
+      );
+
+      await workbook.xlsx.write(res);
+      res.end();
+
+    } catch (error) {
+      console.error("Excel export error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Excel export failed",
+        error: error.message
+      });
+    }
+  },
+
+  getPlacedStudents: async (req, res) => {
+    try {
+      const {
+        departments,
+        branches,
+        courseTypes,
+        courseNames,
+        courseType,
+        courseName,
+        placedBy,
+        companyName,
+        placementDateFrom,
+        placementDateTo,
+        packageRange,
+        searchField,
+        searchValue,
+        page = 1,
+        limit = 10,
+        sortBy = "branch",
+        sortOrder = "ASC"
+      } = req.query;
+
+      const whereClause = {
+        readyForPlacement: "Yes",
+        placementStatus: "Placed"
+      };
+
+      // Department filter
+      if (departments) {
+        whereClause.Department = {
+          [Op.in]: departments.split(",").map(v => v.trim())
+        };
+      }
+
+      // 📌 New Filters
+      // 📌 New Filters (Improved)
+      if (placedBy) {
+        whereClause.placedBy = { [Op.iLike]: `%${placedBy}%` };
+      }
+
+      if (companyName) {
+        whereClause.companyName = { [Op.iLike]: `%${companyName}%` };
+      }
+
+      if (packageRange) {
+        switch (packageRange) {
+          case "<2":
+            whereClause.package = { [Op.lt]: 200000 };
+            break;
+          case "2-4":
+            whereClause.package = { [Op.between]: [200000, 400000] };
+            break;
+          case "4-6":
+            whereClause.package = { [Op.between]: [400000, 600000] };
+            break;
+          case ">6":
+            whereClause.package = { [Op.gt]: 600000 };
+            break;
+          default:
+            break;
+        }
+      }
+
+      // 📅 Validate date format before filtering
+      const isValidDate = (date) => !isNaN(new Date(date).getTime());
+
+      if (placementDateFrom && placementDateTo && isValidDate(placementDateFrom) && isValidDate(placementDateTo)) {
+        whereClause.placementDate = {
+          [Op.between]: [placementDateFrom, placementDateTo]
+        };
+      } else if (placementDateFrom && isValidDate(placementDateFrom)) {
+        whereClause.placementDate = {
+          [Op.gte]: placementDateFrom
+        };
+      } else if (placementDateTo && isValidDate(placementDateTo)) {
+        whereClause.placementDate = {
+          [Op.lte]: placementDateTo
+        };
+      }
+
+      // 🧪 Debug log → You can see what date filter your backend applied
+      console.log("Applied Date Filter ->", whereClause.placementDate);
+
+      // Course filters
+      if (req.query.courses) {
+        whereClause.courseName = {
+          [Op.in]: req.query.courses.split(",").map(v => v.trim())
+        };
+      }
+
+      if (courseTypes) {
+        whereClause.courseType = {
+          [Op.in]: courseTypes.split(",").map(v => v.trim())
+        };
+      } else if (courseType) whereClause.courseType = courseType;
+
+      if (courseNames) {
+        whereClause.courseName = {
+          [Op.in]: courseNames.split(",").map(v => v.trim())
+        };
+      } else if (courseName) whereClause.courseName = courseName;
+
+      // Branch Filter
+      if (branches) {
+        whereClause.branch = {
+          [Op.in]: branches.split(",").map(v => v.trim())
+        };
+      } else if (req.query.branch) whereClause.branch = req.query.branch;
+
+      // Search support
+      if (searchField && searchValue) {
+        whereClause[searchField] = { [Op.iLike]: `%${searchValue}%` };
+      }
+
+      const pageNumber = parseInt(page);
+      const pageSize = parseInt(limit);
+      const offset = (pageNumber - 1) * pageSize;
+
+      const allowedSortFields = [
+        "id", "courseType", "courseName", "branch",
+        "placedBy", "companyName", "placementDate",
+        "package", "createdAt", "updatedAt"
+      ];
+
+      const sortField = allowedSortFields.includes(sortBy)
+        ? sortBy
+        : "branch";
+      const sortDirection = ["ASC", "DESC"].includes(sortOrder.toUpperCase())
+        ? sortOrder.toUpperCase()
+        : "ASC";
+
+      const studentCourseResults = await StudentCourse.findAll({
+        where: whereClause,
+        order: sortBy === "branch" ? [] : [[sortField, sortDirection]]
+      });
+
+      if (studentCourseResults.length === 0) {
+        return res.json({
+          success: true,
+          data: [],
+          pagination: {
+            currentPage: pageNumber,
+            totalPages: 0,
+            totalRecords: 0,
+            recordsOnCurrentPage: 0,
+            recordsPerPage: pageSize,
+            hasNextPage: false,
+            hasPrevPage: false
+          }
+        });
+      }
+
+      // Stable sorting
+      studentCourseResults.forEach((item, index) => {
+        item.originalIndex = index;
+      });
+
+      const customSort = (a, b) => {
+        const branchCompare = (a.branch || "").localeCompare(b.branch || "");
+        if (branchCompare !== 0) return branchCompare;
+
+        const aCompleted = a.ProgressStatus === "Course Completed";
+        const bCompleted = b.ProgressStatus === "Course Completed";
+
+        if (aCompleted && !bCompleted) return -1;
+        if (!aCompleted && bCompleted) return 1;
+
+        return a.originalIndex - b.originalIndex;
+      };
+
+      if (sortBy === "branch") {
+        studentCourseResults.sort(customSort);
+      }
+
+      const studentIds = studentCourseResults.map(r => r.studentId);
+
+      const registrationData = await StudentRegistration.findAll({
+        where: { studentId: { [Op.in]: studentIds } },
+        attributes: [
+          "studentId",
+          "resumePath",
+          "pendingFees",
+          "pendingFees2",
+          "pendingFees3",
+          "pendingFees4"
+        ]
+      });
+
       const regMap = registrationData.reduce((acc, r) => {
         acc[r.studentId] = r.toJSON();
         return acc;
       }, {});
 
-      // Combine both
-      const enrichedRows = paginatedResults.map(row => ({
-        ...row.toJSON(),
-        studentRegistration: regMap[row.studentId] || null
-      }));
+      const enrichedRows = studentCourseResults
+        .slice(offset, offset + pageSize)
+        .map(row => ({
+          ...row.toJSON(),
+          studentRegistration: regMap[row.studentId] || null
+        }));
 
       return res.json({
         success: true,
         data: enrichedRows,
         pagination: {
           currentPage: pageNumber,
-          totalPages: Math.ceil(totalRecords / pageSize),
-          totalRecords,
+          totalPages: Math.ceil(studentCourseResults.length / pageSize),
+          totalRecords: studentCourseResults.length,
           recordsOnCurrentPage: enrichedRows.length,
           recordsPerPage: pageSize,
-          hasNextPage: pageNumber < Math.ceil(totalRecords / pageSize),
+          hasNextPage: pageNumber < Math.ceil(studentCourseResults.length / pageSize),
           hasPrevPage: pageNumber > 1
         }
       });
+
     } catch (error) {
-      console.error("Error in getPlacementEligibleStudents:", error);
+      console.error("Error in getPlacedStudents:", error);
       res.status(500).json({
         success: false,
-        message: "Failed to fetch placement eligible students",
+        message: "Failed to fetch placed students",
         error: error.message
       });
     }
   },
 
-getPlacementEligibleStudentsExcel: async (req, res) => {
-  try {
-    const {
-      departments,
-      skillsKnown,
-      branches,
-      companyLocations,
-      experiences,
-      resumeStatus,
-      courses,
-      courseTypes,
-      courseNames,
-      courseType,
-      courseName,
-      batch,
-      learningMode,
-      branch,
-      searchField,
-      searchValue,
-    } = req.query;
+  getPlacedStudentsExcel: async (req, res) => {
+    try {
+      const {
+        departments,
+        skillsKnown,
+        branches,
+        companyLocations,
+        experiences,
+        resumeStatus,
+        courses,
+        courseTypes,
+        courseNames,
+        courseType,
+        courseName,
+        batch,
+        learningMode,
+        branch,
+        searchField,
+        searchValue,
+      } = req.query;
 
-    // Base condition
-    const whereClause = { readyForPlacement: "Yes" };
+      // Base condition
+      const whereClause = { placementStatus: "Placed" };
 
-    if (departments) {
-      whereClause.Department = { [Op.in]: departments.split(",").map(x => x.trim()) };
-    }
-
-    if (skillsKnown) {
-      const skillsArray = skillsKnown.split(",").map(s => s.trim());
-      const skillConditions = skillsArray.map(skill => ({
-        knownSkill: { [Op.iLike]: `%${skill}%` }
-      }));
-      whereClause[Op.or] = skillConditions;
-    }
-
-    if (courses) {
-      whereClause.courseName = { [Op.in]: courses.split(",").map(x => x.trim()) };
-    } else {
-      if (courseTypes) {
-        whereClause.courseType = { [Op.in]: courseTypes.split(",").map(x => x.trim()) };
-      } else if (courseType) {
-        whereClause.courseType = courseType;
+      // Department filter
+      if (departments) {
+        const departmentArray = departments.split(",").map(dept => dept.trim());
+        whereClause.Department = { [Op.in]: departmentArray };
       }
 
-      if (courseNames) {
-        whereClause.courseName = { [Op.in]: courseNames.split(",").map(x => x.trim()) };
-      } else if (courseName) {
-        whereClause.courseName = courseName;
-      }
-    }
+      // ================================================
+      // 🔥 UPDATED: Skills filter (same as main controller)
+      // ================================================
+      if (skillsKnown) {
+        const skillsArray = skillsKnown.split(",").map(skill => skill.trim().toLowerCase());
 
-    if (branches) {
-      whereClause.branch = { [Op.in]: branches.split(",").map(x => x.trim()) };
-    } else if (branch) {
-      whereClause.branch = branch;
-    }
+        const skillConditions = skillsArray.map(skill =>
+          Sequelize.where(
+            Sequelize.fn("LOWER", Sequelize.col("knownSkill")),
+            {
+              [Op.regexp]: `(^|,)\\s*${skill.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*(,|$)`
+            }
+          )
+        );
 
-    if (companyLocations) {
-      const locValues = companyLocations.split(",").map(x => x.trim());
-      whereClause[Op.or] = locValues.map(loc => ({
-        desiredlocation: { [Op.iLike]: `%${loc}%` },
-      }));
-    }
-
-    if (experiences) {
-      whereClause.experience = { [Op.in]: experiences.split(",").map(x => x.trim()) };
-    }
-
-    if (batch) whereClause.batch = batch;
-    if (learningMode) whereClause.learningMode = learningMode;
-
-    if (searchField && searchValue) {
-      whereClause[searchField] = { [Op.iLike]: `%${searchValue}%` };
-    }
-
-    console.log("Excel whereClause:", whereClause);
-
-    // ============================================
-    // 🔥 UPDATED SECTION – NO DB ORDERING HERE
-    // ============================================
-    const studentCourseResults = await StudentCourse.findAll({
-      where: whereClause,
-      order: [] // custom sorting applied below
-    });
-
-    if (!studentCourseResults.length) {
-      return res.status(404).json({
-        success: false,
-        message: "No eligible students found"
-      });
-    }
-
-    // ============================================
-    // 🔥 CUSTOM SORT FOR EXCEL
-    // ============================================
-    const customExcelSort = (a, b) => {
-      // First sort by branch
-      const branchCompare = (a.branch || "").localeCompare(b.branch || "");
-      if (branchCompare !== 0) return branchCompare;
-
-      // Then sort by ProgressStatus "Course Completed" first
-      const statusA = a.ProgressStatus || "";
-      const statusB = b.ProgressStatus || "";
-
-      if (statusA === "Course Completed" && statusB !== "Course Completed") return -1;
-      if (statusA !== "Course Completed" && statusB === "Course Completed") return 1;
-
-      // Alphabetically if equal
-      return statusA.localeCompare(statusB);
-    };
-
-    // Apply initial sort
-    studentCourseResults.sort(customExcelSort);
-
-    // Map studentIds
-    const studentIds = studentCourseResults.map(s => s.studentId);
-
-    const registrationWhere = {
-      studentId: { [Op.in]: studentIds },
-      [Op.and]: [
-        { pendingFees: { [Op.or]: [0, null] } },
-        { pendingFees2: { [Op.or]: [0, null] } },
-        { pendingFees3: { [Op.or]: [0, null] } },
-        { pendingFees4: { [Op.or]: [0, null] } }
-      ]
-    };
-
-    if (resumeStatus === "uploaded") {
-      registrationWhere.resumePath = { [Op.ne]: null };
-    } else if (resumeStatus === "not_uploaded") {
-      registrationWhere.resumePath = { [Op.is]: null };
-    }
-
-    if (searchField === "educationCourse" && searchValue) {
-      registrationWhere.educationCourse = { [Op.iLike]: `%${searchValue}%` };
-    }
-
-    const registrationData = await StudentRegistration.findAll({
-      where: registrationWhere,
-      attributes: [
-        "studentId",
-        "resumePath",
-        "educationCourse",
-        "pendingFees",
-        "pendingFees2",
-        "pendingFees3",
-        "pendingFees4",
-      ]
-    });
-
-    const eligible = new Set(registrationData.map(r => r.studentId));
-
-    // ============================================
-    // 🔥 Sort AGAIN after filtering
-    // ============================================
-    let filtered = studentCourseResults.filter(s => eligible.has(s.studentId));
-
-    filtered.sort(customExcelSort);
-
-    // Map registration
-    const regMap = {};
-    registrationData.forEach(r => (regMap[r.studentId] = r.toJSON()));
-
-    // ============================================
-    // 🌟 FINAL EXPORT COLUMNS
-    // ============================================
-    const combinedColumns = [
-      "studentName",
-      "branch",
-      "educationQualification",
-      "passedOutYear",
-      "experience",
-      "Department",
-      "knownSkill",
-      "courseName",
-      "ProgressStatus",
-      "desiredlocation",
-      "technicalScore",
-      "technologyRemarks",
-      "communicationScore",
-      "communicationRemarks",
-      "mockInterview",
-      "mockRemarks",
-      "project1Score",
-      "project2Score",
-      "project3Score",
-      "mockTest1Score",
-      "mockTest2Score",
-      "mockTest3Score",
-      "courseStartDate",
-      "courseEndDate",
-      "studentContactNumber",
-      "email_Id",
-      "gender",
-      "mentor",
-      "mentorNumber",
-    ];
-
-    // Custom header names
-    const customHeaderNames = {
-      educationQualification: "Education Qualification",
-      passedOutYear: "Passed Out Year",
-      mockRemarks: "Mock Interview Remarks",
-      experience: "Working Experience"
-    };
-
-    const prettifyHeader = key =>
-      key
-        .replace(/([A-Z])/g, " $1")
-        .replace(/_/g, " ")
-        .replace(/\b\w/g, l => l.toUpperCase())
-        .trim();
-
-    // Join course & registration data
-    const rows = filtered.map(row => ({
-      ...row.toJSON(),
-      ...regMap[row.studentId]
-    }));
-
-    // Create Excel
-    const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet("Placement Eligible Students");
-
-    worksheet.columns = combinedColumns.map(key => ({
-      header: customHeaderNames[key] || prettifyHeader(key),
-      key,
-      width: 25
-    }));
-
-    rows.forEach(row => {
-      const rowData = {};
-
-      combinedColumns.forEach(col => {
-        if (col === "educationQualification") {
-          const diploma = row.diplomaDegree ?? "";
-          const ug = row.ugDegree ?? "";
-          const pg = row.pgDegree ?? "";
-
-          rowData[col] = [diploma, ug, pg]
-            .filter(v => v && v !== "N/A")
-            .join(", ");
-        } else if (col === "passedOutYear") {
-          const dip = row.diplomaPassout ?? "";
-          const ug = row.ugPassout ?? "";
-          const pg = row.pgPassout ?? "";
-
-          rowData[col] = [dip, ug, pg]
-            .filter(v => v && v !== "N/A")
-            .join(", ");
+        if (whereClause[Op.and]) {
+          whereClause[Op.and].push(...skillConditions);
         } else {
-          rowData[col] = row[col] && row[col] !== "N/A" ? row[col] : "";
+          whereClause[Op.and] = skillConditions;
         }
+      }
+
+      // Legacy: course filters
+      if (courses) {
+        whereClause.courseName = { [Op.in]: courses.split(",").map(c => c.trim()) };
+      }
+
+      if (!courses) {
+        if (courseTypes) {
+          const arr = courseTypes.split(",").map(v => v.trim());
+          whereClause.courseType = { [Op.in]: arr };
+        } else if (courseType) {
+          whereClause.courseType = courseType;
+        }
+
+        if (courseNames) {
+          const arr = courseNames.split(",").map(v => v.trim());
+          whereClause.courseName = { [Op.in]: arr };
+        } else if (courseName) {
+          whereClause.courseName = courseName;
+        }
+      }
+
+      // Branch filter
+      if (branches) {
+        const arr = branches.split(",").map(b => b.trim());
+        whereClause.branch = { [Op.in]: arr };
+      } else if (branch) {
+        whereClause.branch = branch;
+      }
+
+      // ================================================
+      // 🔥 UPDATED: Company location filter (same as main controller)
+      // ================================================
+      if (companyLocations) {
+        const arr = companyLocations.split(",").map(v => v.trim());
+        const locConditions = [
+          { desiredlocation: { [Op.iLike]: "%No Constraint%" } },
+          ...arr.map(loc => ({
+            desiredlocation: { [Op.iLike]: `%${loc}%` }
+          }))
+        ];
+
+        if (whereClause[Op.or]) {
+          whereClause[Op.and] = [
+            { [Op.or]: whereClause[Op.or] },
+            { [Op.or]: locConditions }
+          ];
+        } else if (whereClause[Op.and]) {
+          whereClause[Op.and].push({ [Op.or]: locConditions });
+        } else {
+          whereClause[Op.or] = locConditions;
+        }
+      }
+
+      // Experience filter
+      if (experiences) {
+        const arr = experiences.split(",").map(v => v.trim());
+        whereClause.experience = { [Op.in]: arr };
+      }
+
+      // Single filters
+      if (batch) whereClause.batch = batch;
+      if (learningMode) whereClause.learningMode = learningMode;
+
+      // Search
+      if (searchField && searchValue) {
+        whereClause[searchField] = { [Op.iLike]: `%${searchValue}%` };
+      }
+
+      console.log("Excel whereClause:", whereClause);
+
+      // ============================================
+      // Fetch StudentCourse data without DB ordering
+      // ============================================
+      const studentCourseResults = await StudentCourse.findAll({
+        where: whereClause,
+        order: [] // custom sorting applied below
       });
 
-      worksheet.addRow(rowData);
-    });
+      if (!studentCourseResults.length) {
+        return res.status(404).json({
+          success: false,
+          message: "No eligible students found"
+        });
+      }
 
-    // Header styling
-    const headerRow = worksheet.getRow(1);
-    headerRow.font = { bold: true, color: { argb: "FFFFFFFF" } };
-    headerRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF4472C4" } };
-    headerRow.alignment = { horizontal: "center", vertical: "middle" };
+      // ============================================
+      // Custom sort function
+      // ============================================
+      const customExcelSort = (a, b) => {
+        // First: branch
+        const branchCompare = (a.branch || "").localeCompare(b.branch || "");
+        if (branchCompare !== 0) return branchCompare;
 
-    worksheet.eachRow(row => {
-      row.eachCell(cell => {
-        cell.border = {
-          top: { style: "thin" },
-          left: { style: "thin" },
-          bottom: { style: "thin" },
-          right: { style: "thin" }
-        };
+        // Second: ProgressStatus priority (Course Completed first)
+        const statusA = a.ProgressStatus || "";
+        const statusB = b.ProgressStatus || "";
+
+        if (statusA === "Course Completed" && statusB !== "Course Completed") return -1;
+        if (statusA !== "Course Completed" && statusB === "Course Completed") return 1;
+
+        // Third: Alphabetical sort of status
+        return statusA.localeCompare(statusB);
+      };
+
+      // Apply initial sort
+      studentCourseResults.sort(customExcelSort);
+
+      // Map studentIds
+      const studentIds = studentCourseResults.map(s => s.studentId);
+
+      // ================================================
+      // 🔥 UPDATED: Registration filter (same as main controller)
+      // ================================================
+      const registrationWhereClause = {
+        studentId: { [Op.in]: studentIds },
+        [Op.and]: [
+          {
+            [Op.or]: [
+              { pendingFees: { [Op.or]: [null, 0] } },
+              { pendingFees: { [Op.is]: null } }
+            ]
+          },
+          {
+            [Op.or]: [
+              { pendingFees2: { [Op.or]: [null, 0] } },
+              { pendingFees2: { [Op.is]: null } }
+            ]
+          },
+          {
+            [Op.or]: [
+              { pendingFees3: { [Op.or]: [null, 0] } },
+              { pendingFees3: { [Op.is]: null } }
+            ]
+          },
+          {
+            [Op.or]: [
+              { pendingFees4: { [Op.or]: [null, 0] } },
+              { pendingFees4: { [Op.is]: null } }
+            ]
+          }
+        ]
+      };
+
+      if (resumeStatus) {
+        if (resumeStatus === "uploaded") {
+          registrationWhereClause.resumePath = {
+            [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: "" }]
+          };
+        } else if (resumeStatus === "not_uploaded") {
+          registrationWhereClause[Op.or] = [
+            { resumePath: { [Op.is]: null } },
+            { resumePath: "" }
+          ];
+        }
+      }
+
+      if (searchField === "educationCourse" && searchValue) {
+        registrationWhereClause.educationCourse = { [Op.iLike]: `%${searchValue}%` };
+      }
+
+      const registrationData = await StudentRegistration.findAll({
+        where: registrationWhereClause,
+        attributes: [
+          "studentId",
+          "resumePath",
+          "educationCourse",
+          "pendingFees",
+          "pendingFees2",
+          "pendingFees3",
+          "pendingFees4",
+        ]
       });
-    });
 
-    res.setHeader(
-      "Content-Type",
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    );
+      const eligibleStudentIds = new Set(registrationData.map(r => r.studentId));
 
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename="Placement_Eligible_${new Date().toISOString().split("T")[0]}.xlsx"`
-    );
+      // Filter StudentCourse results
+      let filteredStudentCourseResults = studentCourseResults.filter(s =>
+        eligibleStudentIds.has(s.studentId)
+      );
 
-    await workbook.xlsx.write(res);
-    res.end();
+      // ============================================
+      // Re-apply custom sort after filtering
+      // ============================================
+      filteredStudentCourseResults.sort(customExcelSort);
 
-  } catch (error) {
-    console.error("Excel export error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Excel export failed",
-      error: error.message
-    });
-  }
-}
+      // Map registration data
+      const regMap = {};
+      registrationData.forEach(r => (regMap[r.studentId] = r.toJSON()));
 
+      // ============================================
+      // Final export columns
+      // ============================================
+      const combinedColumns = [
+        "studentName",
+        "branch",
+        "educationQualification",
+        "passedOutYear",
+        "experience",
+        "Department",
+        "knownSkill",
+        "courseName",
+        "ProgressStatus",
+        "desiredlocation",
+        "companyName",
+        "companyLocation",
+        "joiningDate",
+        "jobRole",
+        "placedBy",
+        "package",
+        "placementDate",
+        "studentContactNumber",
+        "email_Id",
+        "gender",
+        "mentor",
+        "mentorNumber",
+      ];
+
+      // Custom header names
+      const customHeaderNames = {
+        educationQualification: "Education Qualification",
+        passedOutYear: "Passed Out Year",
+        experience: "Working Experience"
+      };
+
+      const prettifyHeader = key =>
+        key
+          .replace(/([A-Z])/g, " $1")
+          .replace(/_/g, " ")
+          .replace(/\b\w/g, l => l.toUpperCase())
+          .trim();
+
+      // Join course & registration data
+      const rows = filteredStudentCourseResults.map(row => ({
+        ...row.toJSON(),
+        ...regMap[row.studentId]
+      }));
+
+      // Create Excel workbook
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet("Placement Eligible Students");
+
+      worksheet.columns = combinedColumns.map(key => ({
+        header: customHeaderNames[key] || prettifyHeader(key),
+        key,
+        width: 25
+      }));
+
+      rows.forEach(row => {
+        const rowData = {};
+
+        combinedColumns.forEach(col => {
+          if (col === "educationQualification") {
+            const diploma = row.diplomaDegree ?? "";
+            const ug = row.ugDegree ?? "";
+            const pg = row.pgDegree ?? "";
+
+            rowData[col] = [diploma, ug, pg]
+              .filter(v => v && v !== "N/A")
+              .join(", ");
+          } else if (col === "passedOutYear") {
+            const dip = row.diplomaPassout ?? "";
+            const ug = row.ugPassout ?? "";
+            const pg = row.pgPassout ?? "";
+
+            rowData[col] = [dip, ug, pg]
+              .filter(v => v && v !== "N/A")
+              .join(", ");
+          } else {
+            rowData[col] = row[col] && row[col] !== "N/A" ? row[col] : "";
+          }
+        });
+
+        worksheet.addRow(rowData);
+      });
+
+      // Header styling
+      const headerRow = worksheet.getRow(1);
+      headerRow.font = { bold: true, color: { argb: "FFFFFFFF" } };
+      headerRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF4472C4" } };
+      headerRow.alignment = { horizontal: "center", vertical: "middle" };
+
+      // Add borders to all cells
+      worksheet.eachRow(row => {
+        row.eachCell(cell => {
+          cell.border = {
+            top: { style: "thin" },
+            left: { style: "thin" },
+            bottom: { style: "thin" },
+            right: { style: "thin" }
+          };
+        });
+      });
+
+      // Set response headers
+      res.setHeader(
+        "Content-Type",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      );
+
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="Placement_Eligible_${new Date().toISOString().split("T")[0]}.xlsx"`
+      );
+
+      await workbook.xlsx.write(res);
+      res.end();
+
+    } catch (error) {
+      console.error("Excel export error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Excel export failed",
+        error: error.message
+      });
+    }
+  },
 
 
 };

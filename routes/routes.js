@@ -94,7 +94,9 @@ router.put('/attendance/:id', authMiddleware, attendanceController.updateAttenda
 router.delete('/attendance/:id/day/:day', authMiddleware, attendanceController.deleteAttendanceDay);
 
 router.get('/placement-ready', authMiddleware, studentCourseController.getPlacementEligibleStudents);
+router.get('/placedstudent', authMiddleware, studentCourseController.getPlacedStudents);
 router.get('/placement-eligible-students-excel',studentCourseController.getPlacementEligibleStudentsExcel);
+router.get('/placed-students-excel',studentCourseController.getPlacedStudentsExcel);
 router.get('/mentor/students', authMiddleware, studentCourseController.getAllByMentor);
 router.post('/placement-details', authMiddleware, createPlacement);
 router.put('/update/placements/:id',authMiddleware,updatePlacement);
