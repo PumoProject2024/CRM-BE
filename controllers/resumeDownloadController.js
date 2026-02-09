@@ -1,11 +1,126 @@
 const path = require('path');
 const fs = require('fs');
-const { Op } = require('sequelize');
+const mime = require("mime-types");
+const { Op, where, fn, col } = require("sequelize");
 const archiver = require('archiver');
 const Student = require('../models/studenReg');
 const StudentCourse = require('../models/StudentCourse');
 const StudentRegistration = require('../models/studenReg');
+const Placement = require('../models/Placement');
+const MappedStudent = require('../models/Mappedstudents');
+const logger = require("../logger");
 
+
+const getFullFilePath = (resumePath) => {
+  const uploadsDir = process.env.UPLOADS_DIR || path.join(__dirname, "..", "uploads");
+
+  if (!resumePath) return null;
+
+  // ✅ Handle "/uploads/xyz.pdf"
+  if (resumePath.startsWith("/uploads/")) {
+    const relativePath = resumePath.replace("/uploads/", "");
+    return path.join(uploadsDir, relativePath);
+  }
+
+  // ✅ Handle relative paths like "resumes/xyz.pdf"
+  if (!path.isAbsolute(resumePath)) {
+    return path.join(uploadsDir, resumePath);
+  }
+
+  // ✅ Already absolute → return as-is
+  return resumePath;
+};
+const downloadOfferLetter = async (req, res) => {
+  try {
+    const { studentId } = req.params;
+
+    // ✅ Validate input
+    if (!studentId) {
+      return res.status(400).json({
+        success: false,
+        message: "studentId is required"
+      });
+    }
+
+    // ✅ Fetch offerLetterPath from StudentRegistrations
+    const student = await StudentRegistration.findOne({
+      where: { studentId },
+      attributes: ["offerLetterPath"]
+    });
+
+    // ✅ No offer letter uploaded
+    if (!student || !student.offerLetterPath) {
+      return res.status(404).json({
+        success: false,
+        message: "No offer letter found for this student"
+      });
+    }
+
+    // ✅ Build actual file path
+    const filePath = getFullFilePath(student.offerLetterPath);
+
+    if (!filePath || !fs.existsSync(filePath)) {
+      return res.status(404).json({
+        success: false,
+        message: "Offer letter file not found on server"
+      });
+    }
+
+    // ✅ Get file extension from the ACTUAL file path (not DB path)
+    const fileExt = path.extname(filePath);
+    const fileName = `OfferLetter_${studentId}${fileExt}`;
+
+    // ✅ Determine correct MIME type
+    const mimeType = mime.lookup(filePath);
+    
+    if (!mimeType) {
+      console.error("Could not determine MIME type for:", filePath);
+      return res.status(500).json({
+        success: false,
+        message: "Could not determine file type"
+      });
+    }
+
+    // ✅ Set headers with correct MIME type
+    res.setHeader(
+      "Content-Type",
+      mimeType
+    );
+    
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${fileName}"`
+    );
+
+    // ✅ Set content length for better download experience
+    const stat = fs.statSync(filePath);
+    res.setHeader("Content-Length", stat.size);
+
+    // ✅ Stream file
+    const stream = fs.createReadStream(filePath);
+    stream.pipe(res);
+
+    // ✅ Handle stream errors
+    stream.on("error", (err) => {
+      console.error("Offer letter stream error:", err);
+      if (!res.headersSent) {
+        res.status(500).json({
+          success: false,
+          message: "Error downloading offer letter"
+        });
+      }
+    });
+
+  } catch (error) {
+    console.error("Download offer letter error:", error);
+    if (!res.headersSent) {
+      res.status(500).json({
+        success: false,
+        message: "Internal server error"
+      });
+    }
+  }
+};
 // Individual resume download
 const downloadResume = async (req, res) => {
   try {
@@ -33,7 +148,7 @@ const downloadResume = async (req, res) => {
     }
 
     // Construct full file path
-    const filePath = path.join(__dirname, "..", student.resumePath);
+    const filePath = getFullFilePath(student.resumePath);
 
     // Check if file exists
     if (!fs.existsSync(filePath)) {
@@ -124,7 +239,8 @@ const downloadBulkResumes = async (req, res) => {
 
     // 🧠 Add student resumes
     for (const student of students) {
-      const filePath = path.join(__dirname, '..', student.resumePath);
+      const filePath = getFullFilePath(student.resumePath);
+
 
       if (fs.existsSync(filePath)) {
         const fileExt = path.extname(filePath);
@@ -183,7 +299,8 @@ ${notFoundFiles.map(f => `- ${f.name} (${f.studentId})`).join('\n')}`
 // Download all resumes (for admin use)
 const downloadAllResumes = async (req, res) => {
   try {
-    // --- Read same query params as main controller ---
+    logger.info("Incoming request to download all resumes", { query: req.query });
+
     const {
       departments,
       skillsKnown,
@@ -192,70 +309,63 @@ const downloadAllResumes = async (req, res) => {
       experiences,
       resumeStatus,
       courses,
-      // legacy course filters
       courseTypes,
       courseNames,
       courseType,
       courseName,
-      // single filters
       batch,
       learningMode,
       branch,
-      // search
       searchField,
       searchValue,
     } = req.query;
 
-    // --- Base condition: Only students who need placement ---
-    const whereClause = {
-      readyForPlacement: "Yes"
-    };
+    // --- MAIN WHERE CLAUSE ---
+    const whereClause = { readyForPlacement: "Yes" };
 
     // Department filter
     if (departments) {
-      const departmentArray = departments.split(',').map(dept => dept.trim());
-      whereClause.Department = { [Op.in]: departmentArray };
+      whereClause.Department = { [Op.in]: departments.split(",").map(v => v.trim()) };
     }
 
-    // ================================================
-    // 🔥 UPDATED: Skills filter (exact match with regex)
-    // ================================================
+    // ======================================
+    // 🔥 SKILLS FILTER (FIXED & SAFE)
+    // ======================================
     if (skillsKnown) {
-      const skillsArray = skillsKnown.split(',').map(skill => skill.trim().toLowerCase());
+      const skillsArray = skillsKnown
+        .split(",")
+        .map(s => s.trim().toLowerCase())
+        .filter(Boolean);
 
-      const skillConditions = skillsArray.map(skill =>
-        Sequelize.where(
-          Sequelize.fn('LOWER', Sequelize.col('knownSkill')),
-          {
-            [Op.regexp]: `(^|,)\\s*${skill.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*(,|$)`
-          }
-        )
-      );
+      const skillRegexConditions = skillsArray.map(skill => {
+        const escaped = skill.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        return where(
+          fn("LOWER", col("knownSkill")),
+          { [Op.regexp]: `(^|,)\\s*${escaped}\\s*(,|$)` }
+        );
+      });
 
-      if (whereClause[Op.and]) {
-        whereClause[Op.and].push(...skillConditions);
+      if (Array.isArray(whereClause[Op.and])) {
+        whereClause[Op.and].push(...skillRegexConditions);
       } else {
-        whereClause[Op.and] = skillConditions;
+        whereClause[Op.and] = skillRegexConditions;
       }
     }
 
-    // Legacy: course filters
+    // Legacy course filters
     if (courses) {
-      const coursesArray = courses.split(',').map(c => c.trim());
-      whereClause.courseName = { [Op.in]: coursesArray };
+      whereClause.courseName = { [Op.in]: courses.split(",").map(v => v.trim()) };
     }
 
     if (!courses) {
       if (courseTypes) {
-        const arr = courseTypes.split(',').map(v => v.trim());
-        whereClause.courseType = { [Op.in]: arr };
+        whereClause.courseType = { [Op.in]: courseTypes.split(",").map(v => v.trim()) };
       } else if (courseType) {
         whereClause.courseType = courseType;
       }
 
       if (courseNames) {
-        const arr = courseNames.split(',').map(v => v.trim());
-        whereClause.courseName = { [Op.in]: arr };
+        whereClause.courseName = { [Op.in]: courseNames.split(",").map(v => v.trim()) };
       } else if (courseName) {
         whereClause.courseName = courseName;
       }
@@ -263,215 +373,188 @@ const downloadAllResumes = async (req, res) => {
 
     // Branch filter
     if (branches) {
-      const arr = branches.split(',').map(b => b.trim());
-      whereClause.branch = { [Op.in]: arr };
+      whereClause.branch = { [Op.in]: branches.split(",").map(v => v.trim()) };
     } else if (branch) {
       whereClause.branch = branch;
     }
 
-    // ================================================
-    // 🔥 UPDATED: Company location filter (with "No Constraint")
-    // ================================================
+    // Company location filter
     if (companyLocations) {
-      const arr = companyLocations.split(',').map(v => v.trim());
+      const locArray = companyLocations.split(",").map(v => v.trim());
       const locConditions = [
-        { desiredlocation: { [Op.iLike]: '%No Constraint%' } },
-        ...arr.map(loc => ({
+        { desiredlocation: { [Op.iLike]: "%No Constraint%" } },
+        ...locArray.map(loc => ({
           desiredlocation: { [Op.iLike]: `%${loc}%` }
         }))
       ];
 
-      if (whereClause[Op.or]) {
-        whereClause[Op.and] = [
-          { [Op.or]: whereClause[Op.or] },
-          { [Op.or]: locConditions }
-        ];
-      } else if (whereClause[Op.and]) {
-        whereClause[Op.and].push({ [Op.or]: locConditions });
-      } else {
-        whereClause[Op.or] = locConditions;
-      }
+      whereClause[Op.or] = locConditions;
     }
 
     // Experience filter
     if (experiences) {
-      const arr = experiences.split(',').map(v => v.trim());
-      whereClause.experience = { [Op.in]: arr };
+      whereClause.experience = { [Op.in]: experiences.split(",").map(v => v.trim()) };
     }
+    if (req.query.fromPassedYear || req.query.toPassedYear) {
+            const fromYear = req.query.fromPassedYear;
+            const toYear = req.query.toPassedYear || fromYear; // If only fromYear, treat as single year
+    
+            const yearConditions = [];
+    
+            // UG Passout year
+            if (fromYear && toYear) {
+              yearConditions.push({
+                ugPassout: {
+                  [Op.and]: [
+                    { [Op.gte]: fromYear },
+                    { [Op.lte]: toYear }
+                  ]
+                }
+              });
+            }
+    
+            // PG Passout year
+            if (fromYear && toYear) {
+              yearConditions.push({
+                pgPassout: {
+                  [Op.and]: [
+                    { [Op.gte]: fromYear },
+                    { [Op.lte]: toYear }
+                  ]
+                }
+              });
+            }
+    
+            if (yearConditions.length > 0) {
+              if (whereClause[Op.and]) {
+                whereClause[Op.and].push({ [Op.or]: yearConditions });
+              } else {
+                whereClause[Op.and] = [{ [Op.or]: yearConditions }];
+              }
+            }
+          }
 
-    // Single filters
     if (batch) whereClause.batch = batch;
     if (learningMode) whereClause.learningMode = learningMode;
 
-    // Search
     if (searchField && searchValue) {
       whereClause[searchField] = { [Op.iLike]: `%${searchValue}%` };
     }
 
-    // Debug log
-    console.log('Resume ZIP whereClause:', JSON.stringify(whereClause, null, 2));
+    logger.info("WHERE CLAUSE for placement filtering", whereClause);
 
-    // ============================================
-    // Custom sort function (same as other controllers)
-    // ============================================
+    // ======================================
+    // QUERY STUDENT COURSE
+    // ======================================
+    let studentCourseResults = await StudentCourse.findAll({
+      where: whereClause,
+      order: []
+    });
+
+    if (!studentCourseResults.length) {
+      return res.status(404).json({
+        success: false,
+        message: "No placement-eligible students found"
+      });
+    }
+
+    // Custom sort
     const customSort = (a, b) => {
-      // First: branch
-      const branchCompare = (a.branch || '').localeCompare(b.branch || '');
+      const branchCompare = (a.branch || "").localeCompare(b.branch || "");
       if (branchCompare !== 0) return branchCompare;
 
-      // Second: ProgressStatus priority (Course Completed first)
-      const statusA = a.ProgressStatus || '';
-      const statusB = b.ProgressStatus || '';
+      const statusA = a.ProgressStatus || "";
+      const statusB = b.ProgressStatus || "";
 
-      if (statusA === 'Course Completed' && statusB !== 'Course Completed') return -1;
-      if (statusA !== 'Course Completed' && statusB === 'Course Completed') return 1;
+      if (statusA === "Course Completed" && statusB !== "Course Completed") return -1;
+      if (statusA !== "Course Completed" && statusB === "Course Completed") return 1;
 
-      // Third: Alphabetical sort of status
       return statusA.localeCompare(statusB);
     };
 
-    // --- Query StudentCourse with filters (no DB sorting) ---
-    const studentCourseResults = await StudentCourse.findAll({
-      where: whereClause,
-      order: [] // custom sorting applied below
-    });
-
-    if (!studentCourseResults || studentCourseResults.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'No placement-eligible students found matching the filters'
-      });
-    }
-
-    // Apply custom sort
     studentCourseResults.sort(customSort);
 
-    // Extract studentIds from course results
-    const studentIds = studentCourseResults.map(r => r.studentId);
+    const studentIds = studentCourseResults.map(s => s.studentId);
 
-    // ================================================
-    // 🔥 UPDATED: Registration filter (same as main controller)
-    // ================================================
+    // ======================================
+    // REGISTRATION FILTER
+    // ======================================
     const registrationWhereClause = {
       studentId: { [Op.in]: studentIds },
       [Op.and]: [
-        {
-          [Op.or]: [
-            { pendingFees: { [Op.or]: [null, 0] } },
-            { pendingFees: { [Op.is]: null } }
-          ]
-        },
-        {
-          [Op.or]: [
-            { pendingFees2: { [Op.or]: [null, 0] } },
-            { pendingFees2: { [Op.is]: null } }
-          ]
-        },
-        {
-          [Op.or]: [
-            { pendingFees3: { [Op.or]: [null, 0] } },
-            { pendingFees3: { [Op.is]: null } }
-          ]
-        },
-        {
-          [Op.or]: [
-            { pendingFees4: { [Op.or]: [null, 0] } },
-            { pendingFees4: { [Op.is]: null } }
-          ]
-        }
+        { pendingFees: { [Op.or]: [null, 0] } },
+        { pendingFees2: { [Op.or]: [null, 0] } },
+        { pendingFees3: { [Op.or]: [null, 0] } },
+        { pendingFees4: { [Op.or]: [null, 0] } },
       ]
     };
 
-    // Resume status handling (same as main controller)
-    if (resumeStatus) {
-      if (resumeStatus === 'uploaded') {
-        registrationWhereClause.resumePath = {
-          [Op.and]: [
-            { [Op.ne]: null },
-            { [Op.ne]: '' }
-          ]
-        };
-      } else if (resumeStatus === 'not_uploaded') {
-        registrationWhereClause[Op.or] = [
-          { resumePath: { [Op.is]: null } },
-          { resumePath: '' }
-        ];
-      }
+    if (resumeStatus === "uploaded") {
+      registrationWhereClause.resumePath = {
+        [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: "" }]
+      };
     }
 
-    // Add educationCourse search filter if provided
-    if (searchField === 'educationCourse' && searchValue) {
+    if (resumeStatus === "not_uploaded") {
+      registrationWhereClause.resumePath = { [Op.or]: [{ [Op.is]: null }, ""] };
+    }
+
+    if (searchField === "educationCourse" && searchValue) {
       registrationWhereClause.educationCourse = { [Op.iLike]: `%${searchValue}%` };
     }
 
-    // Fetch registration rows matching the fees+resume filters
     const registrationData = await StudentRegistration.findAll({
       where: registrationWhereClause,
       attributes: [
-        'studentId',
-        'resumePath',
-        'educationCourse',
-        'pendingFees',
-        'pendingFees2',
-        'pendingFees3',
-        'pendingFees4'
+        "studentId",
+        "resumePath",
+        "name",
+        "department",
+        "adminbranch"
       ]
     });
 
-    // Eligible student IDs after registration-level filtering
-    const eligibleStudentIds = new Set(registrationData.map(r => r.studentId));
+    const eligibleIds = new Set(registrationData.map(r => r.studentId));
 
-    // Filter StudentCourse rows to include only eligible students
-    let filteredStudentCourseResults = studentCourseResults.filter(row => 
-      eligibleStudentIds.has(row.studentId)
+    let filteredStudentCourseResults = studentCourseResults.filter(row =>
+      eligibleIds.has(row.studentId)
     );
 
-    // ============================================
-    // Re-apply custom sort after filtering
-    // ============================================
     filteredStudentCourseResults.sort(customSort);
 
-    if (filteredStudentCourseResults.length === 0) {
+    if (!filteredStudentCourseResults.length) {
       return res.status(404).json({
         success: false,
-        message: 'No students found with cleared pending fees matching the filters'
+        message: "No eligible students found after fee validation"
       });
     }
 
-    // Now get registration rows for those filtered students that actually have resumePath (non-empty)
-    const filteredStudentIds = filteredStudentCourseResults.map(r => r.studentId);
+    // ======================================
+    // GET STUDENTS WITH RESUMES
+    // ======================================
+    const studentsWithResume = registrationData.filter(r => r.resumePath);
 
-    const studentsWithResume = await StudentRegistration.findAll({
-      where: {
-        studentId: { [Op.in]: filteredStudentIds },
-        resumePath: { 
-          [Op.and]: [
-            { [Op.ne]: null }, 
-            { [Op.ne]: '' }
-          ] 
-        }
-      },
-      attributes: ['studentId', 'resumePath', 'name', 'department', 'adminbranch']
-    });
-
-    if (!studentsWithResume || studentsWithResume.length === 0) {
+    if (!studentsWithResume.length) {
       return res.status(404).json({
         success: false,
-        message: 'No uploaded resumes found for the filtered students'
+        message: "No resumes found for filtered students"
       });
     }
 
-    // --- Prepare ZIP response headers ---
-    const zipFileName = `Filtered_Resumes_${new Date().toISOString().split('T')[0]}.zip`;
-    res.setHeader('Content-Disposition', `attachment; filename="${zipFileName}"`);
-    res.setHeader('Content-Type', 'application/zip');
+    // ======================================
+    // ZIP GENERATION
+    // ======================================
+    const zipFileName = `Filtered_Resumes_${new Date().toISOString().split("T")[0]}.zip`;
 
-    const archive = archiver('zip', { zlib: { level: 9 } });
+    res.setHeader("Content-Disposition", `attachment; filename="${zipFileName}"`);
+    res.setHeader("Content-Type", "application/zip");
 
-    archive.on('error', (err) => {
-      console.error('Archive error:', err);
+    const archive = archiver("zip", { zlib: { level: 9 } });
+
+    archive.on("error", err => {
+      logger.error("Archive error", err);
       if (!res.headersSent) {
-        res.status(500).json({ success: false, message: 'Error creating zip file' });
+        return res.status(500).json({ success: false, message: "ZIP creation failed" });
       }
     });
 
@@ -481,60 +564,321 @@ const downloadAllResumes = async (req, res) => {
     const notFoundFiles = [];
 
     for (const student of studentsWithResume) {
-      const filePath = path.join(__dirname, '..', student.resumePath);
+      const filePath = getFullFilePath(student.resumePath);
 
       if (fs.existsSync(filePath)) {
         const fileExt = path.extname(filePath);
-        const safeName = (student.name || 'student').replace(/[^\w\s]/gi, '_');
-        const safeDept = (student.department || 'Dept').replace(/[^\w\s]/gi, '_');
-        const safeBranch = (student.adminbranch || 'Branch').replace(/[^\w\s]/gi, '_');
 
-        const fileName = `${safeName}_${safeDept}_${safeBranch}_resume${fileExt}`;
+        const safeName = (student.name || "student").replace(/[^\w\s]/gi, "_");
+        const safeDept = (student.department || "Dept").replace(/[^\w\s]/gi, "_");
+        const safeBranch = (student.adminbranch || "Branch").replace(/[^\w\s]/gi, "_");
 
-        archive.file(filePath, { name: fileName });
+        const filename = `${safeName}_${safeDept}_${safeBranch}_resume${fileExt}`;
 
-        addedFiles.push({
-          studentId: student.studentId,
-          name: student.name,
-          fileName
-        });
+        archive.file(filePath, { name: filename });
+
+        addedFiles.push({ studentId: student.studentId, name: student.name, filename });
       } else {
-        notFoundFiles.push({
-          studentId: student.studentId,
-          name: student.name
-        });
+        notFoundFiles.push({ studentId: student.studentId, name: student.name });
       }
     }
 
-    // Add summary inside zip
-    const summaryContent = `Filtered Resumes Download Summary
-Generated on: ${new Date().toISOString()}
+    // ======================================
+    // SUMMARY FILE (FULLY SAFE)
+    // ======================================
+    const safeAdded = Array.isArray(addedFiles) ? addedFiles : [];
+    const safeMissing = Array.isArray(notFoundFiles) ? notFoundFiles : [];
 
-Total filtered students: ${filteredStudentCourseResults.length}
-Resumes added: ${addedFiles.length}
-Files not found: ${notFoundFiles.length}
+    const summary = `
+Filtered Resume Summary
+Generated: ${new Date().toISOString()}
 
-Added files:
-${addedFiles.map(f => `- ${f.name} (${f.studentId}) -> ${f.fileName}`).join('\n')}
+Total Students After Filter: ${filteredStudentCourseResults.length}
+Resumes Added: ${safeAdded.length}
+Missing Files: ${safeMissing.length}
 
-${notFoundFiles.length > 0 ? `Missing files:\n${notFoundFiles.map(f => `- ${f.name} (${f.studentId})`).join('\n')}` : 'All files found.'}
+Added Files:
+${safeAdded.map(f => `- ${f.name} (${f.studentId}) -> ${f.filename}`).join("\n")}
+
+${safeMissing.length ? "Missing Files:\n" + safeMissing.map(f => `- ${f.name} (${f.studentId})`).join("\n") : "All files found."}
 `;
 
-    archive.append(summaryContent, { name: 'download_summary.txt' });
+    archive.append(summary, { name: "summary.txt" });
 
-    // Finalize the archive
     await archive.finalize();
 
   } catch (error) {
-    console.error('downloadAllResumes error:', error);
+    logger.error("downloadAllResumes failed", error);
+
     if (!res.headersSent) {
       res.status(500).json({
         success: false,
-        message: 'Internal server error',
+        message: "Internal server error",
         error: error.message
       });
     }
   }
+};
+const downloadMappedStudentsResumes = async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    const { status } = req.query;
+
+    logger.info("Incoming request to download mapped students resumes", { 
+      companyId, 
+      status 
+    });
+
+    if (!companyId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Company ID is required'
+      });
+    }
+
+    // 1) Get placement details
+    const placement = await Placement.findOne({
+      where: { jobReqId: companyId }
+    });
+
+    if (!placement) {
+      return res.status(404).json({
+        success: false,
+        message: 'Placement not found'
+      });
+    }
+
+    const companyName = placement.companyName || companyId;
+
+    // 2) Get mapped students
+    const whereClause = { companyId };
+    if (status) whereClause.currentStatus = status;
+
+    const mappedStudents = await MappedStudent.findAll({
+      where: whereClause,
+      order: [['createdAt', 'DESC']],
+      attributes: ['id', 'studentId', 'currentStatus', 'interviewDate', 'companyId', 'feedback']
+    });
+
+    if (!mappedStudents.length) {
+      return res.status(404).json({
+        success: false,
+        message: "No mapped students found"
+      });
+    }
+
+    const studentIds = mappedStudents.map(ms => ms.studentId);
+
+    // 3) Fetch StudentCourse data
+    const studentCourseResults = await StudentCourse.findAll({
+      where: { studentId: { [Op.in]: studentIds } },
+      attributes: [
+        'studentId',
+        'studentName',
+        'branch',
+        'courseName',
+        'ProgressStatus',
+        'Department'
+      ]
+    });
+
+    // 4) Custom sort
+    const customSort = (a, b) => {
+      const branchCompare = (a.branch || "").localeCompare(b.branch || "");
+      if (branchCompare !== 0) return branchCompare;
+
+      const statusA = a.ProgressStatus || "";
+      const statusB = b.ProgressStatus || "";
+
+      if (statusA === "Course Completed" && statusB !== "Course Completed") return -1;
+      if (statusA !== "Course Completed" && statusB === "Course Completed") return 1;
+
+      return statusA.localeCompare(statusB);
+    };
+
+    studentCourseResults.sort(customSort);
+
+    // 5) Fetch registration data with resume paths
+    const registrationWhereClause = {
+      studentId: { [Op.in]: studentIds },
+      [Op.and]: [
+        { pendingFees: { [Op.or]: [null, 0] } },
+        { pendingFees2: { [Op.or]: [null, 0] } },
+        { pendingFees3: { [Op.or]: [null, 0] } },
+        { pendingFees4: { [Op.or]: [null, 0] } },
+      ],
+      resumePath: {
+        [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: "" }]
+      }
+    };
+
+    const registrationData = await StudentRegistration.findAll({
+      where: registrationWhereClause,
+      attributes: [
+        "studentId",
+        "resumePath",
+        "name",
+        "department",
+        "adminbranch"
+      ]
+    });
+
+    const eligibleIds = new Set(registrationData.map(r => r.studentId));
+
+    let filteredStudentCourseResults = studentCourseResults.filter(row =>
+      eligibleIds.has(row.studentId)
+    );
+
+    filteredStudentCourseResults.sort(customSort);
+
+    if (!filteredStudentCourseResults.length) {
+      return res.status(404).json({
+        success: false,
+        message: "No eligible students found after fee validation"
+      });
+    }
+
+    // 6) Get students with resumes
+    const studentsWithResume = registrationData.filter(r => r.resumePath);
+
+    if (!studentsWithResume.length) {
+      return res.status(404).json({
+        success: false,
+        message: "No resumes found for mapped students"
+      });
+    }
+
+    // 7) Build lookup maps
+    const studentCourseMap = {};
+    studentCourseResults.forEach(s => {
+      studentCourseMap[s.studentId] = s.toJSON();
+    });
+
+    const mappedStudentMap = {};
+    mappedStudents.forEach(ms => {
+      mappedStudentMap[ms.studentId] = ms.toJSON();
+    });
+
+    // 8) ZIP generation
+    const sanitizedCompanyName = companyName.replace(/[^\w\s]/gi, "_");
+    const zipFileName = `${sanitizedCompanyName}_Mapped_Resumes_${new Date().toISOString().split("T")[0]}.zip`;
+
+    res.setHeader("Content-Disposition", `attachment; filename="${zipFileName}"`);
+    res.setHeader("Content-Type", "application/zip");
+
+    const archive = archiver("zip", { zlib: { level: 9 } });
+
+    archive.on("error", err => {
+      logger.error("Archive error", err);
+      if (!res.headersSent) {
+        return res.status(500).json({ 
+          success: false, 
+          message: "ZIP creation failed" 
+        });
+      }
+    });
+
+    archive.pipe(res);
+
+    const addedFiles = [];
+    const notFoundFiles = [];
+
+    for (const student of studentsWithResume) {
+      const filePath = getFullFilePath(student.resumePath);
+
+      if (fs.existsSync(filePath)) {
+        const fileExt = path.extname(filePath);
+
+        const safeName = (student.name || "student").replace(/[^\w\s]/gi, "_");
+
+        // Get mapping status
+        const mappingInfo = mappedStudentMap[student.studentId] || {};
+
+        const filename = `${safeName}_resume${fileExt}`;
+
+        archive.file(filePath, { name: filename });
+
+        addedFiles.push({ 
+          studentId: student.studentId, 
+          name: student.name, 
+          filename,
+          status: mappingInfo.currentStatus,
+          interviewDate: mappingInfo.interviewDate
+        });
+      } else {
+        notFoundFiles.push({ 
+          studentId: student.studentId, 
+          name: student.name 
+        });
+      }
+    }
+
+    // 9) Summary file
+    const safeAdded = Array.isArray(addedFiles) ? addedFiles : [];
+    const safeMissing = Array.isArray(notFoundFiles) ? notFoundFiles : [];
+
+    const summary = `
+Mapped Students Resume Summary
+Company: ${companyName}
+Job Requirement ID: ${companyId}
+Generated: ${new Date().toISOString()}
+${status ? `Filter: ${status}` : 'Filter: All Statuses'}
+
+Total Mapped Students: ${mappedStudents.length}
+Students After Fee Validation: ${filteredStudentCourseResults.length}
+Resumes Added: ${safeAdded.length}
+Missing Files: ${safeMissing.length}
+
+Added Files:
+${safeAdded.map(f => `- ${f.name} (${f.studentId}) | Status: ${f.status || 'N/A'} | File: ${f.filename}`).join("\n")}
+
+${safeMissing.length ? "Missing Files:\n" + safeMissing.map(f => `- ${f.name} (${f.studentId})`).join("\n") : "All files found."}
+
+---
+Interview Status Breakdown:
+${getStatusBreakdown(safeAdded)}
+`;
+
+    archive.append(summary, { name: "summary.txt" });
+
+    await archive.finalize();
+
+    logger.info("Successfully created ZIP archive", {
+      companyId,
+      totalFiles: safeAdded.length,
+      missingFiles: safeMissing.length
+    });
+
+  } catch (error) {
+    logger.error("downloadMappedStudentsResumes failed", {
+      message: error.message,
+      stack: error.stack,
+      companyId: req.params.companyId,
+      query: req.query
+    });
+
+    if (!res.headersSent) {
+      res.status(500).json({
+        success: false,
+        message: "Internal server error",
+        error: error.message
+      });
+    }
+  }
+};
+
+// Helper function for status breakdown in summary
+function getStatusBreakdown(addedFiles) {
+  const statusCount = {};
+  
+  addedFiles.forEach(file => {
+    const status = file.status || 'Unknown';
+    statusCount[status] = (statusCount[status] || 0) + 1;
+  });
+
+  return Object.entries(statusCount)
+    .map(([status, count]) => `  ${status}: ${count}`)
+    .join("\n") || "  No status data available";
 };
 // Updated unified controller for resume downloads
 const downloadResumes = async (req, res) => {
@@ -559,7 +903,7 @@ const downloadResumes = async (req, res) => {
       // Bulk download - specific student IDs
       downloadType = 'bulk';
       students = await Student.findAll({
-        where: { 
+        where: {
           studentId: studentIds,
           resumePath: { [require('sequelize').Op.ne]: null }
         },
@@ -568,7 +912,7 @@ const downloadResumes = async (req, res) => {
     } else {
       // Filtered download - based on filters
       downloadType = 'filtered';
-      
+
       // Build where clause for filtered download
       const whereClause = {
         placementneeded: 'Yes',
@@ -609,7 +953,44 @@ const downloadResumes = async (req, res) => {
         const experienceArray = experiences.split(',').map(exp => exp.trim());
         whereClause.experience = { [require('sequelize').Op.in]: experienceArray };
       }
+  if (req.query.fromPassedYear || req.query.toPassedYear) {
+        const fromYear = req.query.fromPassedYear;
+        const toYear = req.query.toPassedYear || fromYear; // If only fromYear, treat as single year
 
+        const yearConditions = [];
+
+        // UG Passout year
+        if (fromYear && toYear) {
+          yearConditions.push({
+            ugPassout: {
+              [Op.and]: [
+                { [Op.gte]: fromYear },
+                { [Op.lte]: toYear }
+              ]
+            }
+          });
+        }
+
+        // PG Passout year
+        if (fromYear && toYear) {
+          yearConditions.push({
+            pgPassout: {
+              [Op.and]: [
+                { [Op.gte]: fromYear },
+                { [Op.lte]: toYear }
+              ]
+            }
+          });
+        }
+
+        if (yearConditions.length > 0) {
+          if (whereClause[Op.and]) {
+            whereClause[Op.and].push({ [Op.or]: yearConditions });
+          } else {
+            whereClause[Op.and] = [{ [Op.or]: yearConditions }];
+          }
+        }
+      }
       // Search functionality
       if (searchField && searchValue) {
         whereClause[searchField] = { [require('sequelize').Op.iLike]: `%${searchValue}%` };
@@ -622,32 +1003,32 @@ const downloadResumes = async (req, res) => {
     }
 
     if (students.length === 0) {
-      return res.status(404).json({ 
-        success: false, 
-        message: downloadType === 'bulk' 
-          ? 'No resumes found for the selected students' 
+      return res.status(404).json({
+        success: false,
+        message: downloadType === 'bulk'
+          ? 'No resumes found for the selected students'
           : 'No resumes found matching the current filters'
       });
     }
 
     // Set response headers for zip download
-    const zipFileName = downloadType === 'bulk' 
+    const zipFileName = downloadType === 'bulk'
       ? `Selected_Resumes_${Date.now()}.zip`
       : `Filtered_Resumes_${Date.now()}.zip`;
-      
+
     res.setHeader('Content-Disposition', `attachment; filename="${zipFileName}"`);
     res.setHeader('Content-Type', 'application/zip');
 
     // Create zip archive
     const archive = archiver('zip', { zlib: { level: 9 } });
-    
+
     // Handle archive errors
     archive.on('error', (error) => {
       console.error('Archive error:', error);
       if (!res.headersSent) {
-        res.status(500).json({ 
-          success: false, 
-          message: 'Error creating zip file' 
+        res.status(500).json({
+          success: false,
+          message: 'Error creating zip file'
         });
       }
     });
@@ -660,12 +1041,12 @@ const downloadResumes = async (req, res) => {
     const notFoundFiles = [];
 
     for (const student of students) {
-      const filePath = path.join(__dirname, '..', student.resumePath);
-      
+      const filePath = getFullFilePath(student.resumePath);
+
       if (fs.existsSync(filePath)) {
         const fileExt = path.extname(filePath);
         const fileName = `${student.studentId}_${student.name}_Resume${fileExt}`;
-        
+
         archive.file(filePath, { name: fileName });
         addedFiles.push({
           studentId: student.studentId,
@@ -708,17 +1089,21 @@ ${searchField && searchValue ? `- Search: ${searchField} contains "${searchValue
   } catch (error) {
     console.error('Resume download error:', error);
     if (!res.headersSent) {
-      res.status(500).json({ 
-        success: false, 
-        message: 'Internal server error' 
+      res.status(500).json({
+        success: false,
+        message: 'Internal server error'
       });
     }
   }
 };
+// Individual offer letter download (by studentId only)
+
 
 module.exports = {
   downloadResume,
   downloadBulkResumes,
   downloadAllResumes,
-  downloadResumes
+  downloadResumes,
+  downloadOfferLetter,
+  downloadMappedStudentsResumes
 };

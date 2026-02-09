@@ -28,7 +28,8 @@ exports.login = async (req, res) => {
         email_id: employee.email_id,
         branch: employee.branch, // Ensure branch is included
         emp_name: employee.emp_name, // Ensure the user's name is included here
-        has_access: employee.has_access, // ✅ Add this line
+        has_access: employee.has_access,
+        contact_num: employee.contact_num // ✅ Add this line
 
 
       },
@@ -45,7 +46,8 @@ exports.login = async (req, res) => {
         role: employee.role,
         branch: employee.branch, // Return branch info to frontend
         email_id: employee.email_id,
-        has_access: employee.has_access, // ✅ Add this line
+        has_access: employee.has_access,
+        contact_num: employee.contact_num// ✅ Add this line
 
       },
     });

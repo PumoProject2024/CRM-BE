@@ -69,6 +69,7 @@ exports.loginEmployee = async (req, res) => {
         role: employee.role,
         branch: employee.branch,
         has_access: employee.has_access,
+        contact_num: employee.contact_num
       },
       process.env.JWT_SECRET,
       { expiresIn: "8h" }

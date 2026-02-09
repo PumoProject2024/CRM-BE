@@ -9,7 +9,7 @@ const authMiddleware = (req, res, next) => {
     if (req.originalUrl === "/register") {
       return next(); // Allow access without token
     }
-
+    
     // ✅ Extract the Authorization header
     const authHeader = req.header("Authorization");
     console.log("Incoming Request: ", req.method, req.originalUrl);

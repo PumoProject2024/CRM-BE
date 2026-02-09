@@ -950,7 +950,7 @@ class StudentRegistrationController {
         const courseDetails = await StudentCourse.findOne({
           where: { studentId: student.studentId },
           attributes: [
-            'syllabusCovered', 'courseStartDate', 'courseEndDate',
+            'courseStartDate', 'courseEndDate',
             'mockTest1Score', 'mockTest2Score', 'mockTest3Score',
             'technicalScore', 'communicationScore',
             'project1Score', 'project2Score', 'project3Score',
@@ -993,7 +993,7 @@ class StudentRegistrationController {
       const courseDetails = await StudentCourse.findOne({
         where: { studentId: student.studentId },
         attributes: [
-          'syllabusCovered', 'courseStartDate', 'courseEndDate',
+           'courseStartDate', 'courseEndDate',
           'mockTest1Score', 'mockTest2Score', 'mockTest3Score',
           'technicalScore', 'communicationScore',
           'project1Score', 'project2Score', 'project3Score',
@@ -1566,7 +1566,6 @@ class StudentRegistrationController {
       const courseDetails = await StudentCourse.findOne({
         where: { studentId: student.studentId },
         attributes: [
-          'syllabusCovered',
           'courseStartDate',
           'courseEndDate',
           'mockTest1Score',
@@ -1574,6 +1573,13 @@ class StudentRegistrationController {
           'mockTest3Score',
           'technicalScore',
           'communicationScore',
+          'technologyRemarks',
+          'communicationRemarks',
+          'project1Feedback',
+          'project2Feedback',
+          'project3Feedback',
+          'mockInterview',
+          'mockRemarks',
           'project1Score',
           'project2Score',
           'project3Score',
@@ -1627,6 +1633,8 @@ class StudentRegistrationController {
           'package',
           'placementDate',
           'experience',
+          'placementInterest',
+          'staffRemarks',
           'expCompanyName1', 'expStartDate1', 'expEndDate1', 'expRole1', 'expTechnologies1', 'expCurrentlyWorking1',
           'expCompanyName2', 'expStartDate2', 'expEndDate2', 'expRole2', 'expTechnologies2', 'expCurrentlyWorking2',
           'expCompanyName3', 'expStartDate3', 'expEndDate3', 'expRole3', 'expTechnologies3', 'expCurrentlyWorking3'

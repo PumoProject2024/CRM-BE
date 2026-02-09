@@ -12,12 +12,12 @@ const { getAllEmployeeDetails } = require("../controllers/employeeController");
 const { getAllInvoices } = require('../controllers/invoiceController');
 const studentCourseController = require('../controllers/studentCourseController');
 const attendanceController = require('../controllers/attendanceController');
-const { createPlacement, getPlacements, getUpcomingPlacements, getPastPlacements, getUpcomingPlacementsdrive, updatePlacement } = require('../controllers/placementcontrollers');
+const { createPlacement, getPlacementByJobReqId, getUpcomingPlacements, getPastPlacements, getUpcomingPlacementsdrive, updatePlacement, getAllPlacements,downloadPlacementsExcel } = require('../controllers/placementcontrollers');
 const { upload, uploadFile } = require('../controllers/uploadController');
 const bulkUploadController = require('../controllers/bulkUploadController');
 const syllabusController = require('../controllers/syllabusController');
 const { createStudentPlacement, getStudentPlacementsByStudentId } = require('../controllers/studentPlacementController');
-const { downloadResume, downloadBulkResumes, downloadAllResumes, downloadResumes } = require('../controllers/resumeDownloadController');
+const { downloadResume, downloadBulkResumes, downloadAllResumes, downloadResumes, downloadMappedStudentsResumes, downloadOfferLetter } = require('../controllers/resumeDownloadController');
 const technologyController = require('../controllers/technologyController');
 const placementController = require('../controllers/placementController');
 const mappedStudentController = require("../controllers/mappedStudentController");
@@ -95,11 +95,16 @@ router.delete('/attendance/:id/day/:day', authMiddleware, attendanceController.d
 
 router.get('/placement-ready', authMiddleware, studentCourseController.getPlacementEligibleStudents);
 router.get('/placedstudent', authMiddleware, studentCourseController.getPlacedStudents);
+router.get("/placed", studentCourseController.getPlacedStudentsReport);
 router.get('/placement-eligible-students-excel',studentCourseController.getPlacementEligibleStudentsExcel);
-router.get('/placed-students-excel',studentCourseController.getPlacedStudentsExcel);
+router.get('/placed-students-excel',authMiddleware,studentCourseController.getPlacedStudentsExcel);
+router.get('/students-record/download',authMiddleware,studentCourseController.downloadAllStudentsForExcel);
+router.get("/placements/download/excel", authMiddleware,downloadPlacementsExcel,);
 router.get('/mentor/students', authMiddleware, studentCourseController.getAllByMentor);
 router.post('/placement-details', authMiddleware, createPlacement);
-router.put('/update/placements/:id',authMiddleware,updatePlacement);
+router.put('/update/placements/:jobReqId', authMiddleware, updatePlacement);
+router.get('/job-details', authMiddleware, getAllPlacements);
+router.get('/placements/:jobReqId', authMiddleware, getPlacementByJobReqId);
 router.get('/company-details', authMiddleware, getUpcomingPlacements);
 router.get("/placements/past", authMiddleware, getPastPlacements);
 router.get('/placements/upcoming', getUpcomingPlacementsdrive);
@@ -116,26 +121,34 @@ router.get('/student/profile-pic/:studentId', StudentRegistrationController.getS
 router.get('/student/resume/:studentId', StudentRegistrationController.getStudentResume);
 router.post('/upload-profile', upload.single('profilePic'), uploadFile);
 router.post('/upload-resume', upload.single('resume'), uploadFile);
+router.post('/upload/offer-letter',upload.single('offerLetter'),uploadFile);
 
 router.get('/download/:studentId', downloadResume);
+router.get("/download/offer-letter/:studentId",downloadOfferLetter);
 router.post('/resumes/download-bulk', downloadBulkResumes);
 router.get('/resumes/downloadall', downloadAllResumes);
+router.get('/company/:companyId/download-resumes',downloadMappedStudentsResumes);
 router.get('/resume/download', downloadResumes );
 router.post('/resume/download', downloadResumes );
 
 router.post('/tech', technologyController.createTechnology);
 router.get('/alltech', technologyController.getTechnologies);
 
-router.get('/placements/:placementId/matching-students', placementController.getMatchingStudents);
+router.get('/placements/:jobReqId/matching-students',authMiddleware, placementController.getMatchingStudents);
 
-router.post("/map", mappedStudentController.createMappedStudent);
-router.get("/placement/:companyId", mappedStudentController.getMappedStudentsByCompanyId);
-router.put("/company/:id",mappedStudentController.updateMappedStudent);
-router.get("/student-notifications/:studentId", mappedStudentController.getStudentNotifications);
-router.put("/company-response/:companyId", mappedStudentController.updateStudentResponse);
-router.put('/interview-attendance/:companyId', mappedStudentController.updateInterviewAttendance);
-router.put('/:companyId/selection', authMiddleware, mappedStudentController.updateStudentSelection);
-
+// router.post("/map", mappedStudentController.createMappedStudent);
+// router.get("/placement/:companyId", mappedStudentController.getMappedStudentsByCompanyId);
+// router.put("/company/:id",mappedStudentController.updateMappedStudent);
+// router.get("/student-notifications/:studentId", mappedStudentController.getStudentNotifications);
+// router.put("/company-response/:companyId", mappedStudentController.updateStudentResponse);
+// router.put('/interview-attendance/:companyId', mappedStudentController.updateInterviewAttendance);
+// router.put('/:companyId/selection', authMiddleware, mappedStudentController.updateStudentSelection);
+router.post('/mapped-students/map', mappedStudentController.mapStudent);
+router.delete('/mapped-students/:id', mappedStudentController.unmapStudent);
+router.get('/history/:studentId',mappedStudentController.getStudentHistory);
+router.get('/mapped-students/company/:companyId',mappedStudentController.getMappedStudentsByCompanyId);
+router.get('/company/:companyId/export-excel',mappedStudentController.getMappedStudentsByCompanyIdExcel);
+router.put('/mapped-students/status/:id', mappedStudentController.updateStatus);
 router.post('/student/:studentId/approve-skills', 
   studentAuthMiddleware, 
   (req, res, next) => {

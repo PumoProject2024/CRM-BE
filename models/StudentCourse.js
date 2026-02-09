@@ -46,15 +46,7 @@ const StudentCourse = sequelize.define('StudentCourse', {
       len: { args: [10, 15], msg: "Contact number should be between 10 to 15 digits" }
     }
   },
-  educationQualification: {
-    type: DataTypes.STRING,
-    allowNull: true,
-  },
   experience: {
-    type: DataTypes.STRING,
-    allowNull: true,
-  },
-  clgName: {
     type: DataTypes.STRING,
     allowNull: true,
   },
@@ -80,10 +72,6 @@ const StudentCourse = sequelize.define('StudentCourse', {
       notEmpty: { msg: "Course name cannot be empty" }
     }
   },
-  syllabusCovered: {
-    type: DataTypes.TEXT,
-    allowNull: true,
-  },
   staffId2: {
     type: DataTypes.STRING,
     allowNull: true,
@@ -104,14 +92,6 @@ const StudentCourse = sequelize.define('StudentCourse', {
     allowNull: true,
     validate: {
       len: { args: [0, 100], msg: "Staff Name 3 should be maximum 100 characters" }
-    }
-  },
-  noOfProjects: {
-    type: DataTypes.INTEGER,
-    allowNull: true,
-    validate: {
-      min: { args: [1], msg: "Number of projects should be at least 1" },
-      max: { args: [3], msg: "Number of projects should be maximum 3" }
     }
   },
   projectTitle1: {
@@ -156,12 +136,27 @@ const StudentCourse = sequelize.define('StudentCourse', {
   branch: {
     type: DataTypes.STRING
   },
+  placementInterest: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
   project1Score: { type: DataTypes.FLOAT, allowNull: true },
   project2Score: { type: DataTypes.FLOAT, allowNull: true },
   project3Score: { type: DataTypes.FLOAT, allowNull: true },
+  project1Feedback: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+  project2Feedback: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+  project3Feedback: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
   communicationScore: { type: DataTypes.FLOAT, allowNull: true },
   technicalScore: { type: DataTypes.FLOAT, allowNull: true },
-  noOfMocktest: { type: DataTypes.INTEGER, allowNull: true },
   mockTest1Score: { type: DataTypes.FLOAT, allowNull: true },
   mockTest2Score: { type: DataTypes.FLOAT, allowNull: true },
   mockTest3Score: { type: DataTypes.FLOAT, allowNull: true },
@@ -253,10 +248,6 @@ const StudentCourse = sequelize.define('StudentCourse', {
     allowNull: true,
   },
   communicationRemarks: {
-    type: DataTypes.STRING,
-    allowNull: true,
-  },
-  progressFeedback: {
     type: DataTypes.STRING,
     allowNull: true,
   },
@@ -359,6 +350,8 @@ const StudentCourse = sequelize.define('StudentCourse', {
   placementStatus: {
     type: DataTypes.STRING,
     allowNull: true,
+    defaultValue: "Awaiting for placement"
+
   },
   companyName: {
     type: DataTypes.STRING,
@@ -409,6 +402,48 @@ const StudentCourse = sequelize.define('StudentCourse', {
   expRole3: { type: DataTypes.STRING, allowNull: true },
   expTechnologies3: { type: DataTypes.STRING, allowNull: true },
   expCurrentlyWorking3: { type: DataTypes.BOOLEAN, allowNull: true },
+
+  photoReview: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  photoReviewLink: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  photoReviewReason: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  videoReview: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  videoReviewLink: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  videoReviewReason: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  googleReview: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  googleReviewStars: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    validate: {
+      min: 1,
+      max: 5
+    }
+  },
+  googleReviewReason: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+
 }, {
   tableName: 'student_courses',
   timestamps: true

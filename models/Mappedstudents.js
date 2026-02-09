@@ -9,11 +9,17 @@ const MappedStudent = sequelize.define('MappedStudent', {
   },
 
   companyId: {
-    type: DataTypes.INTEGER,
+    type: DataTypes.STRING,
     allowNull: false,
+    comment: 'Reference to Placement.jobReqId'
   },
 
   companyName: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
+
+  studentId: {
     type: DataTypes.STRING,
     allowNull: false,
   },
@@ -23,66 +29,72 @@ const MappedStudent = sequelize.define('MappedStudent', {
     allowNull: true,
   },
 
-  studentId: {
+  currentStatus: {
     type: DataTypes.STRING,
     allowNull: false,
-  },
-
-  isAccepted: {
-    type: DataTypes.BOOLEAN,
-    defaultValue: null,
-  },
-  rejectReason: {
-  type: DataTypes.TEXT,
-  allowNull: true,
-  defaultValue: null,
-},
-
-  attended: {
-    type: DataTypes.BOOLEAN,
-    allowNull: true,
-    defaultValue: null,
-    comment: 'null = not marked, true = attended, false = not attended'
+    defaultValue: 'Assigned',
+    comment: 'Current status in the recruitment workflow (flexible for future additions)'
   },
 
   feedback: {
     type: DataTypes.TEXT,
     allowNull: true,
     defaultValue: null,
-    comment: 'Student feedback about the interview experience'
+    comment: 'General feedback - can be from student or company based on currentStatus'
   },
 
-  attendanceUpdatedAt: {
+  statusHistory: {
+    type: DataTypes.JSONB,
+    allowNull: true,
+    defaultValue: [],
+    comment: 'Array of {status, feedback, timestamp, updatedBy} objects to track status changes'
+  },
+
+  lastStatusUpdate: {
     type: DataTypes.DATE,
     allowNull: true,
     defaultValue: null,
-    comment: 'When attendance was last updated'
+    comment: 'Timestamp of the last status change'
   },
 
-   isSelected: {
-    type: DataTypes.BOOLEAN,
-    defaultValue: null,
-    comment: 'null = not decided, true = selected, false = not selected'
-  },
-
-  selectionFeedback: {
+  notes: {
     type: DataTypes.TEXT,
     allowNull: true,
     defaultValue: null,
-    comment: 'Company feedback about the selection decision'
+    comment: 'Additional notes or remarks'
   },
-
-  selectionUpdatedAt: {
-    type: DataTypes.DATE,
-    allowNull: true,
-    defaultValue: null,
-    comment: 'When selection status was last updated'
-  },
-
 
 }, {
   tableName: 'MappedStudents',
   timestamps: true,
+  indexes: [
+    {
+      unique: true,
+      fields: ['companyId', 'studentId'],
+      name: 'unique_company_student_mapping'
+    },
+    {
+      fields: ['currentStatus']
+    },
+    {
+      fields: ['studentId']
+    }
+  ]
+});
+
+// Hook to automatically update statusHistory when currentStatus changes
+MappedStudent.addHook('beforeUpdate', (instance, options) => {
+  if (instance.changed('currentStatus')) {
+    const history = instance.statusHistory || [];
+    history.push({
+      status: instance.currentStatus,
+      feedback: instance.feedback,
+      timestamp: new Date(),
+      previousStatus: instance._previousDataValues.currentStatus
+    });
+    instance.statusHistory = history;
+    instance.lastStatusUpdate = new Date();
+  }
 });
 
 module.exports = MappedStudent;

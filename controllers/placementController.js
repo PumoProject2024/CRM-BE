@@ -5,353 +5,265 @@ const { Op } = require('sequelize');
 
 const placementController = {
   // Get students whose skills match the placement requirements
-  getMatchingStudents: async (req, res) => {
-    try {
-      const { placementId } = req.params;
-      const page = parseInt(req.query.page) || 1;
-      const limit = parseInt(req.query.limit) || 10;
-      const mappingFilter = req.query.mappingFilter || 'all'; // 'all', 'mapped', 'not-mapped'
-      const offset = (page - 1) * limit;
+getMatchingStudents: async (req, res) => {
+  try {
+    const { jobReqId } = req.params;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const mappingFilter = req.query.mappingFilter || 'all';
 
-      // 1. Get placement details
-      const placement = await Placement.findByPk(placementId);
-      if (!placement) {
-        return res.status(404).json({ success: false, message: "Placement not found" });
-      }
+    const filterDepartment = req.query.department;
+    const filterSkills = req.query.skills;
+    const filterLocation = req.query.location;
+    const filterExperience = req.query.experience;
+    const filterCourseName = req.query.courseName;
 
-      // 2. Extract Department + skillKnown
-      const placementDepartment = placement.Department?.trim();
-      let placementSkills = placement.skillKnown?.split(",")
-        .map(skill => skill.trim().toLowerCase())
-        .filter(skill => skill && skill !== "null");
+    const filterBranches = req.query.branches;
+    const filterBranch = req.query.branch;
+    const fromPassedYear = req.query.fromPassedYear;
+    const toPassedYear = req.query.toPassedYear;
+    const studentName = req.query.studentName;
 
-      if (!placementDepartment) {
-        return res.status(400).json({
-          success: false,
-          message: "No department specified for this placement"
-        });
-      }
+    const offset = (page - 1) * limit;
 
-      // 3. Build where condition
-      let whereCondition = { Department: placementDepartment };
+    // Extract user info from req.user (set by auth middleware)
+    const { role, emp_name } = req.user;
 
-      // Fetch ALL students (without pagination first)
-      const students = await StudentCourse.findAll({
-        where: whereCondition
-      });
+    // 1. Get placement
+    const placement = await Placement.findOne({
+      where: { jobReqId }
+    });
 
-      // 4. Get mapped student IDs for this company
-      const mappedStudents = await MappedStudent.findAll({
-        where: {
-          companyId: placementId
-        },
-        attributes: ['studentId']
-      });
+    if (!placement) {
+      return res.status(404).json({ success: false, message: "Placement not found" });
+    }
 
-      const mappedStudentIds = new Set(mappedStudents.map(ms => ms.studentId));
+    // 2. Extract placement requirements
+    const placementDepartment = placement.department?.trim();
+    const placementSkills = placement.skillSet?.split(",")
+      .map(skill => skill.trim().toLowerCase())
+      .filter(skill => skill && skill !== "null");
 
-      // 5. Calculate match scores and add mapping status
-      const studentsWithMatchScore = students.map(student => {
-        const studentData = student.toJSON();
+    const placementLocation = placement.jobLocation?.trim();
+    const placementExperience = placement.experienceRequired?.trim();
+    const placementPassedOutYear = placement.passedOutYear?.trim();
+    const placementAllowedBranches = placement.allowedBranches?.trim();
 
-        // Get student skills
-        const studentSkills = studentData.knownSkill
-          ? studentData.knownSkill.split(',')
-            .map(skill => skill.trim().toLowerCase())
-            .filter(skill => skill && skill !== "null")
-          : [];
-
-        // Find matched skills
-        const matchedSkills = [];
-        let matchCount = 0;
-
-        if (placementSkills && placementSkills.length > 0 && studentSkills.length > 0) {
-          placementSkills.forEach(placementSkill => {
-            const matchedStudentSkills = studentSkills.filter(studentSkill =>
-              studentSkill.includes(placementSkill) || placementSkill.includes(studentSkill)
-            );
-
-            matchedStudentSkills.forEach(matchedSkill => {
-              if (!matchedSkills.includes(matchedSkill)) {
-                matchedSkills.push(matchedSkill);
-                matchCount++;
-              }
-            });
-          });
-        }
-
-        // Calculate match score
-        const matchScore = placementSkills && placementSkills.length > 0
-          ? Math.round((matchCount / placementSkills.length) * 100)
-          : 0;
-
-        return {
-          ...studentData,
-          matchScore: Math.min(matchScore, 100), // cap at 100
-          matchedSkills,
-          totalRequiredSkills: placementSkills ? placementSkills.length : 0,
-          totalMatchedSkills: matchCount,
-          isMapped: mappedStudentIds.has(studentData.studentId)
-        };
-      });
-
-      // 6. Sort globally (highest score first)
-      studentsWithMatchScore.sort((a, b) => b.matchScore - a.matchScore);
-
-      // 7. Apply mapping filter BEFORE pagination
-      let filteredStudents = studentsWithMatchScore;
-      if (mappingFilter === 'mapped') {
-        filteredStudents = studentsWithMatchScore.filter(student => student.isMapped);
-      } else if (mappingFilter === 'not-mapped') {
-        filteredStudents = studentsWithMatchScore.filter(student => !student.isMapped);
-      }
-
-      // 8. Apply pagination AFTER filtering
-      const totalFilteredStudents = filteredStudents.length;
-      const totalPages = Math.ceil(totalFilteredStudents / limit);
-      const paginatedStudents = filteredStudents.slice(offset, offset + limit);
-
-      // 9. Get counts for all categories
-      const allStudentsCount = studentsWithMatchScore.length;
-      const mappedCount = studentsWithMatchScore.filter(s => s.isMapped).length;
-      const notMappedCount = studentsWithMatchScore.filter(s => !s.isMapped).length;
-
-      // 10. Response
-      res.json({
-        success: true,
-        data: {
-          placement: {
-            id: placement.id,
-            companyName: placement.companyName,
-            dateOfPlacement: placement.dateOfPlacement,
-            recruitmentRole: placement.recruitmentRole,
-            technology: placement.technology,
-            Department: placementDepartment,
-            requiredSkills: placementSkills || [],
-            skillKnown: placementSkills?.join(", ") || null
-          },
-          matchingStudents: paginatedStudents,
-          pagination: {
-            currentPage: page,
-            totalPages,
-            totalStudents: totalFilteredStudents, // This is now the filtered count
-            studentsPerPage: limit,
-            hasNextPage: page < totalPages,
-            hasPreviousPage: page > 1
-          },
-          counts: {
-            all: allStudentsCount,
-            mapped: mappedCount,
-            notMapped: notMappedCount
-          }
-        }
-      });
-
-    } catch (error) {
-      console.error("Error finding matching students:", error);
-      res.status(500).json({
+    if (!placementDepartment) {
+      return res.status(400).json({
         success: false,
-        message: "Internal server error",
-        error: error.message
+        message: "No department specified for this placement"
       });
     }
-  },
-  // Alternative method for more advanced skill matching
-  getAdvancedMatchingStudents: async (req, res) => {
-    try {
-      const { placementId } = req.params;
-      const { minMatchPercentage = 30 } = req.query; // Minimum match percentage
 
-      const page = parseInt(req.query.page) || 1;
-      const limit = parseInt(req.query.limit) || 10;
-      const offset = (page - 1) * limit;
+    // 3. Build where condition
+    let whereCondition = {};
 
-      const placement = await Placement.findByPk(placementId);
+    whereCondition.Department = filterDepartment || placementDepartment;
+    whereCondition.placementStatus = 'Awaiting for placement';
 
-      if (!placement) {
-        return res.status(404).json({
-          success: false,
-          message: 'Placement not found'
-        });
-      }
 
-      // Get both skillSet and skillKnown from placement
-      const placementSkillSet = placement.skillSet ?
-        placement.skillSet.toLowerCase().split(',').map(skill => skill.trim()) : [];
-      const placementSkillKnown = placement.skillKnown ?
-        placement.skillKnown.toLowerCase().split(',').map(skill => skill.trim()) : [];
-
-      const allPlacementSkills = [...new Set([...placementSkillSet, ...placementSkillKnown])];
-
-      if (allPlacementSkills.length === 0) {
-        return res.status(400).json({
-          success: false,
-          message: 'No skills specified for this placement'
-        });
-      }
-
-      // Get students with course details
-      const students = await StudentCourse.findAll({
-        where: {
-          [Op.or]: [
-            { knownSkill: { [Op.not]: null } },
-            { skillSet: { [Op.not]: null } }
-          ]
-        }
-      });
-
-      let matchingStudents = [];
-
-      students.forEach(student => {
-        const studentSkillSet = student.skillSet ?
-          student.skillSet.toLowerCase().split(',').map(skill => skill.trim()) : [];
-        const studentKnownSkill = student.knownSkill ?
-          student.knownSkill.toLowerCase().split(',').map(skill => skill.trim()) : [];
-
-        const allStudentSkills = [...new Set([...studentSkillSet, ...studentKnownSkill])];
-
-        if (allStudentSkills.length === 0) return;
-
-        // Calculate exact matches
-        const exactMatches = allPlacementSkills.filter(placementSkill =>
-          allStudentSkills.includes(placementSkill)
-        );
-
-        // Calculate partial matches (contains)
-        const partialMatches = allPlacementSkills.filter(placementSkill =>
-          allStudentSkills.some(studentSkill =>
-            studentSkill.includes(placementSkill) || placementSkill.includes(studentSkill)
-          ) && !exactMatches.includes(placementSkill)
-        );
-
-        const totalMatches = exactMatches.length + (partialMatches.length * 0.7); // Partial matches weighted
-        const matchPercentage = (totalMatches / allPlacementSkills.length) * 100;
-
-        if (matchPercentage >= minMatchPercentage) {
-          matchingStudents.push({
-            ...student.toJSON(),
-            matchDetails: {
-              exactMatches,
-              partialMatches,
-              matchPercentage: Math.round(matchPercentage),
-              totalSkillsRequired: allPlacementSkills.length,
-              studentSkills: allStudentSkills
-            }
-          });
-        }
-      });
-
-      // Sort by match percentage
-      matchingStudents.sort((a, b) => b.matchDetails.matchPercentage - a.matchDetails.matchPercentage);
-
-      // Pagination logic
-      const totalStudents = matchingStudents.length;
-      const totalPages = Math.ceil(totalStudents / limit);
-      const paginatedStudents = matchingStudents.slice(offset, offset + limit);
-
-      res.json({
-        success: true,
-        data: {
-          placement: {
-            id: placement.id,
-            companyName: placement.companyName,
-            recruitmentRole: placement.recruitmentRole,
-            technology: placement.technology,
-            requiredSkills: allPlacementSkills,
-            salary: placement.salary,
-            experienceRequired: placement.experienceRequired
-          },
-          matchingStudents: paginatedStudents,
-          pagination: {
-            currentPage: page,
-            totalPages: totalPages,
-            totalStudents: totalStudents,
-            studentsPerPage: limit,
-            hasNextPage: page < totalPages,
-            hasPreviousPage: page > 1
-          },
-          searchCriteria: {
-            minMatchPercentage: parseInt(minMatchPercentage),
-            totalMatches: totalStudents
-          }
-        }
-      });
-
-    } catch (error) {
-      console.error('Error in advanced matching:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Internal server error',
-        error: error.message
-      });
+    // 🔥 NEW: Trainer role filtering
+    if (role === 'Trainer' && emp_name) {
+      // Trainer can only see students they're assigned to
+      whereCondition[Op.or] = [
+        { mentor: emp_name },
+        { staffName1: emp_name },
+        { staffName2: emp_name },
+        { staffName3: emp_name }
+      ];
     }
-  },
-  // Get students eligible for specific placement based on multiple criteria
-  getEligibleStudents: async (req, res) => {
-    try {
-      const { placementId } = req.params;
+    // For other roles (super-admin, branch-head, placement-officer, etc.) - show all students
 
-      const placement = await Placement.findByPk(placementId);
+    // 🔥 NEW: Filter by allowedBranches from placement
+    if (placementAllowedBranches && placementAllowedBranches.toLowerCase() !== 'all branches') {
+      // Split allowedBranches by comma and trim whitespace
+      const allowedBranchList = placementAllowedBranches
+        .split(',')
+        .map(b => b.trim())
+        .filter(b => b); // Remove empty strings
 
-      if (!placement) {
-        return res.status(404).json({
-          success: false,
-          message: 'Placement not found'
-        });
-      }
-
-      // Build dynamic where clause based on placement requirements
-      const whereClause = {};
-
-      // Add skill matching
-      if (placement.skillKnown) {
-        const skills = placement.skillKnown.toLowerCase().split(',').map(s => s.trim());
-        whereClause[Op.or] = skills.map(skill => ({
-          [Op.or]: [
-            { knownSkill: { [Op.iLike]: `%${skill}%` } },
-            { skillSet: { [Op.iLike]: `%${skill}%` } }
-          ]
-        }));
-      }
-
-      // Add qualification matching if specified
-      if (placement.qualification && placement.qualification !== 'Any') {
-        whereClause.educationQualification = {
-          [Op.iLike]: `%${placement.qualification}%`
+      if (allowedBranchList.length > 0) {
+        whereCondition.branch = {
+          [Op.in]: allowedBranchList
         };
       }
+    }
+    // If allowedBranches is 'All Branches' or null/empty, don't add branch filter
 
-      const eligibleStudents = await StudentCourse.findAll({
-        where: whereClause,
-        order: [['createdAt', 'DESC']]
-      });
+    // Manual filter overrides (if provided in query params)
+    if (filterBranches) {
+      whereCondition.branch = {
+        [Op.in]: filterBranches.split(",").map(b => b.trim())
+      };
+    } else if (filterBranch) {
+      whereCondition.branch = filterBranch;
+    }
 
-      res.json({
-        success: true,
-        data: {
-          placement: {
-            id: placement.id,
-            companyName: placement.companyName,
-            recruitmentRole: placement.recruitmentRole,
-            technology: placement.technology,
-            qualification: placement.qualification,
-            experienceRequired: placement.experienceRequired,
-            salary: placement.salary
-          },
-          eligibleStudents,
-          totalEligible: eligibleStudents.length
+    if (filterLocation) {
+      whereCondition.desiredlocation = { [Op.like]: `%${filterLocation}%` };
+    }
+
+    if (filterExperience) {
+      whereCondition.experience = { [Op.like]: `%${filterExperience}%` };
+    }
+
+ if (filterCourseName) {
+  const courseList = filterCourseName
+    .split(',')
+    .map(c => c.trim())
+    .filter(Boolean);
+
+  whereCondition.courseName = {
+    [Op.in]: courseList
+  };
+}
+
+
+    if (studentName) {
+      whereCondition.studentName = {
+        [Op.iLike]: `%${studentName.trim()}%`
+      };
+    }
+
+    // Passed-out year filters
+    if (fromPassedYear || toPassedYear) {
+      const startYear = fromPassedYear;
+      const endYear = toPassedYear || fromPassedYear;
+
+      const yearConditions = [
+        { ugPassout: { [Op.and]: [{ [Op.gte]: startYear }, { [Op.lte]: endYear }] } },
+        { pgPassout: { [Op.and]: [{ [Op.gte]: startYear }, { [Op.lte]: endYear }] } },
+        { diplomaPassout: { [Op.and]: [{ [Op.gte]: startYear }, { [Op.lte]: endYear }] } }
+      ];
+
+      if (whereCondition[Op.and]) {
+        whereCondition[Op.and].push({ [Op.or]: yearConditions });
+      } else {
+        whereCondition[Op.and] = [{ [Op.or]: yearConditions }];
+      }
+    }
+
+    // 4. Fetch students
+    const students = await StudentCourse.findAll({
+      where: whereCondition
+    });
+
+    // 5. Fetch mapped students WITH mappingId
+    const mappedStudents = await MappedStudent.findAll({
+      where: { companyId: jobReqId },
+      attributes: ['id', 'studentId']
+    });
+
+    // sets and map for quick lookup
+    const mappedStudentIds = new Set(mappedStudents.map(ms => ms.studentId));
+
+    const mappedStudentMap = {};
+    mappedStudents.forEach(ms => {
+      mappedStudentMap[ms.studentId] = ms.id;
+    });
+
+    // 6. Skills to match
+    const skillsToMatch = filterSkills
+      ? filterSkills.split(",").map(skill => skill.trim().toLowerCase()).filter(Boolean)
+      : placementSkills;
+
+    // 7. Match logic + add mappingId
+    const studentsWithMatchScore = students.map(student => {
+      const studentData = student.toJSON();
+
+      // normalize student skills
+      const studentSkills = studentData.knownSkill
+        ? studentData.knownSkill
+          .split(',')
+          .map(skill => skill.trim().toLowerCase())
+          .filter(skill => skill && skill !== 'null')
+        : [];
+
+      // normalize required skills
+      const requiredSkills = skillsToMatch
+        ? skillsToMatch.map(s => s.trim().toLowerCase())
+        : [];
+
+      let matchCount = 0;
+      const matchedSkills = [];
+
+      // EXACT MATCH (no substring matching)
+      requiredSkills.forEach(reqSkill => {
+        if (studentSkills.includes(reqSkill)) {
+          matchedSkills.push(reqSkill);
+          matchCount++;
         }
       });
 
-    } catch (error) {
-      console.error('Error finding eligible students:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Internal server error',
-        error: error.message
-      });
+      const matchScore = requiredSkills.length
+        ? Math.round((matchCount / requiredSkills.length) * 100)
+        : 0;
+
+      return {
+        ...studentData,
+        matchScore: Math.min(matchScore, 100),
+        matchedSkills,
+        totalRequiredSkills: requiredSkills.length,
+        totalMatchedSkills: matchCount,
+        isMapped: mappedStudentIds.has(studentData.studentId),
+        mappingId: mappedStudentMap[studentData.studentId] || null
+      };
+    });
+
+    // 8. Sort - Primary by readyForPlacement, Secondary by matchScore
+    studentsWithMatchScore.sort((a, b) => {
+      // Primary sort: readyForPlacement === 'Yes' comes first
+      const aReady = a.readyForPlacement?.trim().toLowerCase() === 'yes' ? 1 : 0;
+      const bReady = b.readyForPlacement?.trim().toLowerCase() === 'yes' ? 1 : 0;
+
+      if (bReady !== aReady) {
+        return bReady - aReady; // Students with 'Yes' come first
+      }
+
+      // Secondary sort: by matchScore (descending)
+      return b.matchScore - a.matchScore;
+    });
+
+    // 9. Mapping filter
+    let filteredStudents = studentsWithMatchScore;
+    if (mappingFilter === 'mapped') {
+      filteredStudents = filteredStudents.filter(s => s.isMapped);
+    } else if (mappingFilter === 'not-mapped') {
+      filteredStudents = filteredStudents.filter(s => !s.isMapped);
     }
+
+    // 10. Pagination
+    const totalFilteredStudents = filteredStudents.length;
+    const totalPages = Math.ceil(totalFilteredStudents / limit);
+    const paginatedStudents = filteredStudents.slice(offset, offset + limit);
+
+    // 11. Response
+    res.json({
+      success: true,
+      data: {
+        placement,
+        matchingStudents: paginatedStudents,
+        pagination: {
+          currentPage: page,
+          totalPages,
+          totalStudents: totalFilteredStudents,
+          studentsPerPage: limit,
+          hasNextPage: page < totalPages,
+          hasPreviousPage: page > 1
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error("Error finding matching students:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message
+    });
   }
+}
 };
 
 module.exports = placementController;

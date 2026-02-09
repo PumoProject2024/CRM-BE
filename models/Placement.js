@@ -8,14 +8,35 @@ const Placement = sequelize.define('Placement', {
     primaryKey: true,
   },
 
-  jobId: {                // Added jobId field
+  jobReqId: {
     type: DataTypes.STRING,
     allowNull: true,
     unique: true,
   },
 
-  placementOfficerName: {
+  jobReqStatus: {
     type: DataTypes.STRING,
+    allowNull: false,
+    defaultValue: 'Open',
+  },
+
+  createdDate: {
+    type: DataTypes.DATEONLY,
+    allowNull: false,
+  },
+
+  createdBy: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
+
+  jobTitle: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
+
+  jobDescription: {
+    type: DataTypes.TEXT,
     allowNull: false,
   },
 
@@ -24,38 +45,31 @@ const Placement = sequelize.define('Placement', {
     allowNull: false,
   },
 
-  companyLocation: {
+  jobLocation: {
     type: DataTypes.STRING,
     allowNull: false,
   },
 
-  contactPerson: {
+  department: {
     type: DataTypes.STRING,
     allowNull: false,
   },
 
-  contactPersonNumber: {
+  skillSet: {
     type: DataTypes.STRING,
     allowNull: false,
   },
-
-  recruitmentRole: {
+  additionalSkills: {
     type: DataTypes.STRING,
-    allowNull: false,
+    allowNull: true,
   },
-
-  technology: {
-    type: DataTypes.STRING,
-    allowNull: false,
-  },
-
   qualification: {
     type: DataTypes.STRING,
     allowNull: false,
   },
 
   passedOutYear: {
-    type: DataTypes.STRING, // or INTEGER if you're strictly storing year
+    type: DataTypes.STRING,
     allowNull: false,
   },
 
@@ -74,60 +88,88 @@ const Placement = sequelize.define('Placement', {
     allowNull: false,
   },
 
-  bondDetails: {          // Added bondDetails field
+  bondDetails: {
     type: DataTypes.TEXT,
     allowNull: true,
   },
 
-  action: {
+  interviewType: {
     type: DataTypes.STRING,
-    allowNull: true,
-  },
-
-  dateOfPlacement: {
-    type: DataTypes.DATEONLY,
     allowNull: false,
-  },
-
-  directApply: {
-    type: DataTypes.STRING,
-    allowNull: true,
-  },
-
-  additionalRemarks: {
-    type: DataTypes.TEXT,
-    allowNull: true,
-  },
-  
-  requirementIdentifiedDate: {
-    type: DataTypes.DATEONLY,
-    allowNull: true,
   },
 
   directApplyLink: {
     type: DataTypes.STRING,
     allowNull: true,
   },
-  Department: {
+
+  modeOfInterview: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
+
+  numberOfOpenings: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+  },
+
+  numberOfRounds: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
+
+  interviewDate: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+  },
+
+  interviewTime: {
+    type: DataTypes.TIME,
+    allowNull: true,
+  },
+
+  interviewLocation: {
     type: DataTypes.STRING,
     allowNull: true,
   },
-  skillSet: {
+
+  venue: {
     type: DataTypes.STRING,
-    allowNull: true
-  },
-  skillKnown: {
-    type: DataTypes.STRING,
-    allowNull: true
-  },
-  email:{
-   type: DataTypes.STRING,
     allowNull: true,
   },
-  status:{
-      type: DataTypes.STRING,
+
+  additionalDetails: {
+    type: DataTypes.TEXT,
     allowNull: true,
-  }
+  },
+
+  companyHRName: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+
+  companyHRContact: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+
+  companyHREmail: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  allowedBranches: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    defaultValue: 'All Branches',
+  },
+  feedbackForClosure: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+  },
+  createdContact: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
 
 }, {
   tableName: 'Placements',
