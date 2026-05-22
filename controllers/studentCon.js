@@ -6,7 +6,7 @@ const { fn, col, where } = require('sequelize');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
-
+const StudentDeviceToken = require("../models/StudentDeviceToken");
 
 // Now you can use sequelize in your updateStudentRegistration function
 
@@ -140,9 +140,17 @@ class StudentRegistrationController {
 
       // 🔹 Check if same contactNo is registered for the same course
       const existingContact = await StudentRegistration.findOne({
-        where: { contactNo, course },
+        where: { contactNo },
         attributes: ["studentId", "contactNo", "modified_by"],
       });
+
+      if (existingContact) {
+        return res.status(409).json({
+          success: false,
+          message: `This contact number (${contactNo}) is already registered by ${existingContact.modified_by}.`,
+          registeredBy: existingContact.modified_by,
+        });
+      }
 
       if (existingContact) {
         return res.status(409).json({
@@ -897,154 +905,106 @@ class StudentRegistrationController {
       if (!email || !password) {
         return res.status(400).json({
           success: false,
-          message: 'Email and password are required',
+          message: "Email and password are required",
         });
       }
 
-      // Find student details first
+      // Find student
       const student = await StudentRegistration.findOne({
         where: { email_Id: email },
         attributes: [
-          'studentId',
-          'name',
-          'email_Id',
-          'contactNo',
-          'ParentNo',
-          'address',
-          'educationLevel',
-          'department',
-          'clg_name',
-          'educationCourse',
-          'studentStatus',
-          'dob',
-          'studentRequirement',
-          'courseType',
-          'course',
-          'adminlocation',
-          'adminbranch',
-          'profilePicPath',
-          'staffAssigned',
-          'placementneeded',
-          'password'
+          "id", "studentId", "name", "email_Id", "contactNo", "ParentNo",
+          "address", "educationLevel", "department", "clg_name",
+          "educationCourse", "studentStatus", "dob", "studentRequirement",
+          "courseType", "course", "adminlocation", "adminbranch",
+          "profilePicPath", "staffAssigned", "placementneeded",
+          "password", "lastLogin"
         ]
       });
 
       if (!student) {
         return res.status(404).json({
           success: false,
-          message: 'Student/Staff not found with this email',
+          message: "Student not found with this email",
         });
       }
 
-      // Check if it's first time login (password is null/empty)
+      // Fetch course details once
+      const courseDetails = await StudentCourse.findOne({
+        where: { studentId: student.studentId }
+      });
+
+      // FIRST TIME LOGIN
       if (!student.password) {
-        // First time login - check studentId as password
+
         if (student.studentId !== password) {
           return res.status(401).json({
             success: false,
-            message: 'Invalid student ID',
+            message: "Invalid student ID",
           });
         }
 
-        // Fetch course details
-        const courseDetails = await StudentCourse.findOne({
-          where: { studentId: student.studentId },
-          attributes: [
-            'courseStartDate', 'courseEndDate',
-            'mockTest1Score', 'mockTest2Score', 'mockTest3Score',
-            'technicalScore', 'communicationScore',
-            'project1Score', 'project2Score', 'project3Score',
-            'projectTitle1', 'projectTitle2', 'projectTitle3',
-            'project1Status', 'project2Status', 'project3Status',
-            'desiredlocation', 'gender', 'tenthPassout', 'tenthPercentage',
-            'twelfthPassout', 'twelfthPercentage', 'collegePassout',
-            'cgpa', 'Department', 'skillSet', 'knownSkill',
-            'tenthInstitution', 'tenthDepartment', 'tenthDegree',
-            'twelfthInstitution', 'twelfthDepartment', 'twelfthDegree',
-            'diplomaInstitution', 'diplomaDepartment', 'diplomaDegree', 'diplomaPassout', 'diplomaPercentage',
-            'ugInstitution', 'ugDepartment', 'ugDegree', 'ugPassout', 'ugPercentage',
-            'pgInstitution', 'pgDepartment', 'pgDegree', 'pgPassout', 'pgPercentage'
-          ]
-        });
-
-        const response = {
-          ...student.toJSON(),
-          courseDetails: courseDetails ? courseDetails.toJSON() : null
-        };
+        // update last login
+        await student.update({ lastLogin: new Date() });
 
         return res.status(200).json({
           success: true,
-          message: 'First time login - password setup required',
-          student: response,
+          message: "First time login - password setup required",
+          student: {
+            ...student.toJSON(),
+            courseDetails: courseDetails ? courseDetails.toJSON() : null
+          },
           requirePasswordSetup: true
         });
       }
 
-      // Not first time login - verify hashed password
+      // NORMAL LOGIN
       const isPasswordValid = await bcrypt.compare(password, student.password);
+
       if (!isPasswordValid) {
         return res.status(401).json({
           success: false,
-          message: 'Invalid password',
+          message: "Invalid password",
         });
       }
 
-      // Fetch course details
-      const courseDetails = await StudentCourse.findOne({
-        where: { studentId: student.studentId },
-        attributes: [
-           'courseStartDate', 'courseEndDate',
-          'mockTest1Score', 'mockTest2Score', 'mockTest3Score',
-          'technicalScore', 'communicationScore',
-          'project1Score', 'project2Score', 'project3Score',
-          'projectTitle1', 'projectTitle2', 'projectTitle3',
-          'project1Status', 'project2Status', 'project3Status',
-          'desiredlocation', 'gender', 'tenthPassout', 'tenthPercentage',
-          'twelfthPassout', 'twelfthPercentage', 'collegePassout',
-          'cgpa', 'Department', 'skillSet', 'knownSkill',
-          'tenthInstitution', 'tenthDepartment', 'tenthDegree',
-          'twelfthInstitution', 'twelfthDepartment', 'twelfthDegree',
-          'diplomaInstitution', 'diplomaDepartment', 'diplomaDegree', 'diplomaPassout', 'diplomaPercentage',
-          'ugInstitution', 'ugDepartment', 'ugDegree', 'ugPassout', 'ugPercentage',
-          'pgInstitution', 'pgDepartment', 'pgDegree', 'pgPassout', 'pgPercentage'
-        ]
-      });
+      // Update last login
+      await student.update({ lastLogin: new Date() });
 
-      // Generate JWT token for student
-      const tokenPayload = {
-        studentId: student.studentId,
-        name: student.name,
-        email_Id: student.email_Id,
-        course: student.course,
-        courseType: student.courseType,
-        userType: 'student' // To distinguish from employee tokens
-      };
-
-      const token = jwt.sign(tokenPayload, process.env.JWT_SECRET, {
-        expiresIn: '7d' // Token expires in 7 days
-      });
+      // Generate token
+      const token = jwt.sign(
+        {
+          studentId: student.studentId,
+          name: student.name,
+          email_Id: student.email_Id,
+          course: student.course,
+          courseType: student.courseType,
+          userType: "student"
+        },
+        process.env.JWT_SECRET,
+        { expiresIn: "7d" }
+      );
 
       const response = {
         ...student.toJSON(),
         courseDetails: courseDetails ? courseDetails.toJSON() : null
       };
 
-      // Remove password from response for security
       delete response.password;
 
-      res.status(200).json({
+      return res.status(200).json({
         success: true,
-        message: 'Login successful',
+        message: "Login successful",
         student: response,
-        token: token,
+        token,
         requirePasswordSetup: false
       });
 
     } catch (error) {
-      console.error('Login error:', error);
+      console.error("Student login error:", error);
       res.status(500).json({
         success: false,
-        message: 'Internal server error',
+        message: "Internal server error",
         error: error.message,
       });
     }
@@ -1740,7 +1700,47 @@ class StudentRegistrationController {
       });
     }
   }
+  static async saveFcmToken(req, res) {
 
+    try {
+      console.log("BODY:", req.body);
+      const { token, deviceType } = req.body;
+
+      const studentId = req.student.studentId;
+
+      if (!token) {
+        return res.status(400).json({
+          success: false,
+          message: "Token required"
+        });
+      }
+
+      await StudentDeviceToken.findOrCreate({
+        where: { token },
+        defaults: {
+          studentId,
+          token,
+          deviceType
+        }
+      });
+
+      return res.json({
+        success: true,
+        message: "Device token saved"
+      });
+
+    } catch (error) {
+
+      console.error(error);
+
+      return res.status(500).json({
+        success: false,
+        message: "Server error"
+      });
+
+    }
+
+  }
   // New controller for completed students with no pending fees
   static async getCompletedStudentsWithNoPendingFees(req, res) {
     try {

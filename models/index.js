@@ -8,8 +8,15 @@ const Placement = require("./Placement");
 
 
 // Existing associations
-StudentRegistration.hasMany(Invoice, { foreignKey: "studentId" });
-Invoice.belongsTo(StudentRegistration, { foreignKey: "studentId" });
+StudentRegistration.hasMany(Invoice, { 
+  foreignKey: "studentId",
+  sourceKey: "studentId"   // ✅ IMPORTANT
+});
+
+Invoice.belongsTo(StudentRegistration, { 
+  foreignKey: "studentId",
+  targetKey: "studentId"   // ✅ IMPORTANT
+});
 
 Employee.hasMany(Invoice, { foreignKey: "EmpId" });
 Invoice.belongsTo(Employee, { foreignKey: "EmpId" });
@@ -39,26 +46,16 @@ Attendance.belongsTo(StudentRegistration, {
   as: "studentRegistration"
 });
 
-MappedStudent.belongsTo(StudentCourse, {
-  foreignKey: "studentId",
-  targetKey: "studentId",
-  as: "studentCourse"
-});
 
-StudentCourse.hasMany(MappedStudent, {
-  foreignKey: "studentId",
-  sourceKey: "studentId", 
-  as: "mappedStudents"
-});
 MappedStudent.belongsTo(Placement, {
   foreignKey: "companyId", 
-  targetKey: "id",
+  targetKey: "jobReqId",   // ✅ FIX
   as: "placement"
 });
 
 Placement.hasMany(MappedStudent, {
   foreignKey: "companyId",
-  sourceKey: "id",
+  sourceKey: "jobReqId",   // ✅ FIX
   as: "mappedStudents"
 });
 

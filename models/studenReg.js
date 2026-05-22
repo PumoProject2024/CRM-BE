@@ -279,7 +279,22 @@ const StudentRegistration = sequelize.define('StudentRegistration', {
       len: { args: [8, 100], msg: "Password should be between 8 and 100 characters" }
     }
   },
-
+  reset_token: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+  },
+  reset_token_expires: {
+    type: DataTypes.DATE,
+    allowNull: true,
+  },
+  fcmToken: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+  },
+  lastLogin: {
+    type: DataTypes.DATE,
+    allowNull: true,
+  }
 }, {
   tableName: 'student_registrations',
   timestamps: true,

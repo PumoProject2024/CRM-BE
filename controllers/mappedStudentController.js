@@ -1,14 +1,18 @@
 const MappedStudent = require('../models/Mappedstudents');
 const StudentCourse = require('../models/StudentCourse');
+const { sendMappingEmail } = require("../utils/sendMappingEmail");
+const { sendUnmappingEmail } = require("../utils/sendUnmappingEmail");
+const { sendStatusUpdateEmail } = require('../utils/sendStatusUpdateEmail');
 const StudentRegistration = require('../models/studenReg');
 const Placement = require('../models/Placement');
+const admin = require('../firebaseAdmin');
 const { Op } = require('sequelize');
 const ExcelJS = require('exceljs');
 const logger = require("../logger");
-
+const StudentDeviceToken = require("../models/StudentDeviceToken");
 
 const mappedStudentController = {
-  // POST - Map student to company
+
   mapStudent: async (req, res) => {
     try {
       const {
@@ -16,76 +20,155 @@ const mappedStudentController = {
         companyName,
         studentId,
         interviewDate: rawInterviewDate,
-        currentStatus = 'Assigned',
+        currentStatus = "Assigned",
         feedback = null,
         notes = null
       } = req.body;
-
-      // 🔒 validate required fields
+      // ✅ validate required fields
       if (!companyId || !companyName || !studentId) {
         return res.status(400).json({
           success: false,
-          message: 'Company ID, Company Name, and Student ID are required fields'
+          message: "Company ID, Company Name, and Student ID are required fields"
         });
       }
-
-      // 🔍 normalize interviewDate -------------------------------
+      // ✅ normalize interview date
       let interviewDate = null;
-
-      if (rawInterviewDate && rawInterviewDate !== 'Invalid date') {
+      if (rawInterviewDate && rawInterviewDate !== "Invalid date") {
         const d = new Date(rawInterviewDate);
-
         if (!isNaN(d.getTime())) {
-          // store as YYYY-MM-DD for DATEONLY column
           interviewDate = d.toISOString().slice(0, 10);
         }
       }
-      // -----------------------------------------------------------
-
-      // 🔁 duplicate mapping check
+      // ✅ duplicate check
       const existingMapping = await MappedStudent.findOne({
         where: { companyId, studentId }
       });
-
       if (existingMapping) {
         return res.status(409).json({
           success: false,
-          message: 'Student is already mapped to this company'
+          message: "Student is already mapped to this company"
         });
-      }
 
+      }
+      // ✅ status history
       const statusHistory = [{
         status: currentStatus,
         feedback,
         timestamp: new Date(),
         previousStatus: null
       }];
-
+      // ✅ create mapping
       const newMappedStudent = await MappedStudent.create({
+
         companyId,
         companyName,
         studentId,
-        interviewDate,         // ✔ always valid or null now
+        interviewDate,
         currentStatus,
         feedback,
         notes,
         statusHistory,
-        lastStatusUpdate: new Date()
+        lastStatusUpdate: new Date(),
+        mappedByName: req.user.emp_name,
+        mappedByContact: req.user.contact_num,
+
       });
 
-      return res.status(201).json({
+      const [affectedRows] = await StudentCourse.increment('mappingCount', {
+        where: { studentId }
+      });
+      console.log(`🔢 mappingCount increment affected rows: ${affectedRows}`);
+      // ✅ RESPOND IMMEDIATELY (FAST)
+      res.status(201).json({
         success: true,
-        message: 'Student successfully mapped to company',
+        message: "Student successfully mapped to company",
         data: newMappedStudent
       });
+      // ====================================================
+      // 🔔 PUSH + EMAIL IN BACKGROUND (NO API DELAY)
+      // ====================================================
+      (async () => {
+        try {
+          // =====================
+          // PUSH NOTIFICATION
+          // =====================
+          const tokens = await StudentDeviceToken.findAll({
+            where: { studentId },
+            attributes: ["token"]
+          });
+          const tokenList = tokens.map(t => t.token);
+          console.log("TOKENS:", tokenList);
+          if (tokenList.length > 0) {
+            const response =
+              await admin.messaging().sendEachForMulticast({
+                tokens: tokenList,
+                notification: {
+                  title: "🎯 Interview Opportunity Assigned",
+                  body:
+                    `${companyName} has shortlisted you. Check your interview details now.`
+                },
+                data: {
+                  companyId: String(companyId),
+                  studentId: String(studentId),
+                  type: "INTERVIEW_ASSIGNED"
+                },
+                webpush: {
+                  notification: {
+                    icon: "/images/logo.png"
+                  },
+                  fcmOptions: {
+                    link: "https://pumotechnovationcrm.com/login"
+                  }
+                }
+              });
+            // remove invalid tokens
+            for (let i = 0; i < response.responses.length; i++) {
+              if (!response.responses[i].success) {
+                await StudentDeviceToken.destroy({
+                  where: { token: tokenList[i] }
+                });
+              }
+            }
+          }
+          else {
+            console.log("No tokens found");
+          }
+          // =====================
+          // EMAIL
+          // =====================
+          const student = await StudentRegistration.findOne({
+            where: { studentId },
+            attributes: ["email_Id"]
+          });
+          if (student?.email_Id) {
+            await sendMappingEmail(
+              student.email_Id,
+              studentId,
+              companyName,
+              interviewDate,
+              newMappedStudent.mappedByName,
+              newMappedStudent.mappedByContact
+            );
+          }
+          else {
+            console.log("No student email found");
+          }
+        }
+        catch (err) {
+          console.error("Background notification/email error:", err);
+        }
+      })();
+    }
+    catch (error) {
 
-    } catch (error) {
-      console.error('Error mapping student:', error);
+      console.error("Error mapping student:", error);
+
       return res.status(500).json({
         success: false,
-        message: 'Internal server error',
+        message: "Internal server error",
         error: error.message
       });
+
     }
   },
 
@@ -97,7 +180,7 @@ const mappedStudentController = {
       if (!id) {
         return res.status(400).json({
           success: false,
-          message: 'Mapping ID is required'
+          message: "Mapping ID is required",
         });
       }
 
@@ -106,23 +189,48 @@ const mappedStudentController = {
       if (!mappedStudent) {
         return res.status(404).json({
           success: false,
-          message: 'Mapped student not found'
+          message: "Mapped student not found",
         });
       }
 
+      // get student email
+      const student = await StudentRegistration.findOne({
+        where: { studentId: mappedStudent.studentId },
+      });
+
+      // send email BEFORE delete
+      if (student?.email_Id) {
+        await sendUnmappingEmail(
+          student.email_Id,
+          mappedStudent.studentId,
+          mappedStudent.companyName,
+          mappedStudent.mappedByName,
+          mappedStudent.mappedByContact
+        );
+      }
+
+      // delete mapping
       await mappedStudent.destroy();
+
+      // ✅ Decrement mappingCount (floor at 0)
+      await StudentCourse.decrement('mappingCount', {
+        where: {
+          studentId: mappedStudent.studentId,
+          mappingCount: { [Op.gt]: 0 }   // prevent going below 0
+        }
+      });
 
       res.status(200).json({
         success: true,
-        message: 'Student successfully unmapped from company'
+        message: "Student successfully unmapped from company",
       });
 
     } catch (error) {
-      console.error('Error unmapping student:', error);
+      console.error("Error unmapping student:", error);
       res.status(500).json({
         success: false,
-        message: 'Internal server error',
-        error: error.message
+        message: "Internal server error",
+        error: error.message,
       });
     }
   },
@@ -174,12 +282,12 @@ const mappedStudentController = {
   getMappedStudentsByCompanyId: async (req, res) => {
     try {
       const { companyId } = req.params;
-      const { status } = req.query;
+      const { status, acknowledgementStatus, branch, studentName } = req.query;
 
       if (!companyId) {
         return res.status(400).json({
           success: false,
-          message: 'Company ID is required'
+          message: "Company ID is required"
         });
       }
 
@@ -189,19 +297,41 @@ const mappedStudentController = {
       });
 
       const skillsToMatch = placement?.skillSet
-        ? placement.skillSet.split(',')
+        ? placement.skillSet
+          .split(",")
           .map(s => s.trim().toLowerCase())
           .filter(Boolean)
         : [];
 
-      // 🔹 2) get mapped students
+      // 🔹 2) get mapped students with filters
       const whereClause = { companyId };
-      if (status) whereClause.currentStatus = status;
+
+      if (status) {
+        whereClause.currentStatus = status;
+      }
+
+      if (acknowledgementStatus) {
+        whereClause.acknowledgementStatus = acknowledgementStatus;
+      }
 
       const mappedStudents = await MappedStudent.findAll({
         where: whereClause,
-        order: [['createdAt', 'DESC']],
-        attributes: ['id', 'studentId', 'currentStatus', 'interviewDate', 'companyId', 'feedback']
+        order: [["createdAt", "DESC"]],
+        attributes: [
+          "id",
+          "studentId",
+          "companyId",
+          "currentStatus",
+          "interviewDate",
+          "feedback",
+          "mappedByName",
+          "mappedByContact",
+          "createdAt",
+
+          // ✅ NEW FIELDS
+          "acknowledgementStatus",
+          "acknowledgementDate"
+        ]
       });
 
       if (!mappedStudents.length) {
@@ -212,32 +342,42 @@ const mappedStudentController = {
         });
       }
 
-      // 🔹 3) fetch only required StudentCourse fields (edit your 15 columns here)
+      // 🔹 3) fetch StudentCourse fields
       const studentIds = mappedStudents.map(ms => ms.studentId);
 
-      // 🔹 3) fetch only required StudentCourse fields (your 15 columns)
       const students = await StudentCourse.findAll({
         where: { studentId: { [Op.in]: studentIds } },
         attributes: [
-          'studentId',
-          'studentName',
-          'branch',
-          'courseName',
-          'desiredlocation',
-          'ugDegree',
-          'ugPassout',
-          'pgDegree',
-          'pgPassout',
-          'knownSkill',          // required for match score
-          'experience',
-          'diplomaDepartment',
-          'diplomaPassout',
-          'ugDepartment',
-          'pgDepartment',
-          'id'
+          "studentId",
+          "studentName",
+          "branch",
+          "courseName",
+          "desiredlocation",
+          "ugDegree",
+          "ugPassout",
+          "pgDegree",
+          "pgPassout",
+          "knownSkill",
+          "experience",
+          "diplomaDepartment",
+          "diplomaPassout",
+          "ugDepartment",
+          "pgDepartment",
+          "id",
+          "placementInterest",
+          "staffRemarks",
+          "ProgressStatus"
         ]
       });
+      const studentRegistrations = await StudentRegistration.findAll({
+        where: { studentId: { [Op.in]: studentIds } },
+        attributes: ["studentId", "lastLogin"]
+      });
 
+      const loginMap = {};
+      studentRegistrations.forEach(r => {
+        loginMap[r.studentId] = r.lastLogin;
+      });
       // 🔹 4) build lookup
       const studentMap = {};
       students.forEach(s => {
@@ -245,55 +385,80 @@ const mappedStudentController = {
       });
 
       // 🔹 5) merge + compute match score
-      const enriched = mappedStudents.map(ms => {
+      let enriched = mappedStudents.map(ms => {
         const s = studentMap[ms.studentId] || {};
+        const lastLogin = loginMap[ms.studentId] || null;
 
-        // student skills
         const studentSkills = s.knownSkill
-          ? s.knownSkill.split(',')
+          ? s.knownSkill
+            .split(",")
             .map(x => x.trim().toLowerCase())
             .filter(Boolean)
           : [];
 
-        // skill matching
+        const requiredSkills = skillsToMatch
+          ? skillsToMatch.map(x => x.trim().toLowerCase()).filter(Boolean)
+          : [];
+
         let matchCount = 0;
         const matchedSkills = [];
 
-        skillsToMatch.forEach(req => {
-          studentSkills.forEach(st => {
-            if (st.includes(req) || req.includes(st)) {
-              if (!matchedSkills.includes(st)) {
-                matchedSkills.push(st);
-                matchCount++;
-              }
-            }
-          });
+        // EXACT MATCH ONLY
+        requiredSkills.forEach(reqSkill => {
+          if (studentSkills.includes(reqSkill)) {
+            matchedSkills.push(reqSkill);
+            matchCount++;
+          }
         });
 
         const matchScore =
-          skillsToMatch.length > 0
-            ? Math.round((matchCount / skillsToMatch.length) * 100)
+          requiredSkills.length > 0
+            ? Math.round((matchCount / requiredSkills.length) * 100)
             : 0;
 
         return {
-          // mapping table
+          // mapping fields
           mappingId: ms.id,
           companyId: ms.companyId,
           currentStatus: ms.currentStatus,
           interviewDate: ms.interviewDate,
           feedback: ms.feedback,
+          mappedByName: ms.mappedByName,
+          mappedByContact: ms.mappedByContact,
+          createdAt: ms.createdAt,
 
-          // student course fields
+          // ✅ NEW FIELDS RETURNED
+          acknowledgementStatus: ms.acknowledgementStatus,
+          acknowledgementDate: ms.acknowledgementDate,
+
+          // student fields
           ...s,
+          lastLogin,
 
-          // computed values
+          // computed fields
           matchScore: Math.min(matchScore, 100),
           matchedSkills,
           totalRequiredSkills: skillsToMatch.length,
           totalMatchedSkills: matchCount
         };
       });
+      // ✅ APPLY BRANCH FILTER HERE
+      if (branch) {
+        const branches = branch.split(",").map(b => b.trim().toLowerCase());
 
+        enriched = enriched.filter(student =>
+          student.branch &&
+          branches.includes(student.branch.toLowerCase())
+        );
+      }
+      if (studentName) {
+        const search = studentName.trim().toLowerCase();
+
+        enriched = enriched.filter(student =>
+          student.studentName &&
+          student.studentName.toLowerCase().includes(search)
+        );
+      }
       res.status(200).json({
         success: true,
         count: enriched.length,
@@ -301,19 +466,27 @@ const mappedStudentController = {
       });
 
     } catch (error) {
-      console.error('Error fetching mapped students by company ID:', error);
+      console.error("Error fetching mapped students by company ID:", error);
       res.status(500).json({
         success: false,
-        message: 'Internal server error',
+        message: "Internal server error",
         error: error.message
       });
     }
   },
+
   getMappedStudentsByCompanyIdExcel: async (req, res) => {
     try {
       const { companyId } = req.params;
-      const { status } = req.query;
-
+      const {
+        status,
+        acknowledgementStatus,
+        branch,
+        studentName,
+        placementInterest,
+        fromDate,
+        toDate
+      } = req.query;
       if (!companyId) {
         return res.status(400).json({
           success: false,
@@ -340,13 +513,19 @@ const mappedStudentController = {
         : [];
 
       // 2) Get mapped students
+
       const whereClause = { companyId };
       if (status) whereClause.currentStatus = status;
+      if (acknowledgementStatus) {   // ✅ add this filter
+        whereClause.acknowledgementStatus = acknowledgementStatus;
+      }
+
 
       const mappedStudents = await MappedStudent.findAll({
         where: whereClause,
         order: [['createdAt', 'DESC']],
-        attributes: ['id', 'studentId', 'currentStatus', 'interviewDate', 'companyId', 'feedback']
+        attributes: ['id', 'studentId', 'currentStatus', 'interviewDate', 'companyId', 'feedback', 'mappedByName',
+          'mappedByContact', 'createdAt', 'acknowledgementStatus', 'acknowledgementFeedback', 'acknowledgementDate']
       });
 
       if (!mappedStudents.length) {
@@ -436,7 +615,8 @@ const mappedStudentController = {
           "pendingFees",
           "pendingFees2",
           "pendingFees3",
-          "pendingFees4"
+          "pendingFees4",
+          "lastLogin"
         ]
       });
 
@@ -493,6 +673,12 @@ const mappedStudentController = {
           currentStatus: mappingInfo.currentStatus,
           interviewDate: mappingInfo.interviewDate,
           feedback: mappingInfo.feedback,
+          mappedByName: mappingInfo.mappedByName,
+          mappedByContact: mappingInfo.mappedByContact,
+          mappedDate: mappingInfo.createdAt,
+          acknowledgementStatus: mappingInfo.acknowledgementStatus,
+          acknowledgementFeedback: mappingInfo.acknowledgementFeedback,
+          acknowledgementDate: mappingInfo.acknowledgementDate,
           matchScore,
           matchedSkills: matchedSkills.join(', ')
         };
@@ -501,6 +687,49 @@ const mappedStudentController = {
       // Re-sort after merging
       enrichedData.sort(customExcelSort);
 
+      let finalData = enrichedData;
+
+      if (branch) {
+        const branches = branch.split(",").map(b => b.trim().toLowerCase());
+
+        finalData = finalData.filter(student =>
+          student.branch &&
+          branches.includes(student.branch.toLowerCase())
+        );
+      }
+      if (placementInterest) {
+        const interests = placementInterest
+          .split(",")
+          .map(p => p.trim());
+
+        finalData = finalData.filter(student =>
+          student.placementInterest &&
+          interests.includes(student.placementInterest)
+        );
+      }
+      if (studentName) {
+        const search = studentName.trim().toLowerCase();
+
+        finalData = finalData.filter(student =>
+          student.studentName &&
+          student.studentName.toLowerCase().includes(search)
+        );
+      }
+      if (fromDate) {
+        const startDate = new Date(fromDate + ":00+05:30");
+
+        finalData = finalData.filter(student =>
+          new Date(student.mappedDate) >= startDate
+        );
+      }
+
+      if (toDate) {
+        const endDate = new Date(toDate + ":59+05:30");
+
+        finalData = finalData.filter(student =>
+          new Date(student.mappedDate) <= endDate
+        );
+      }
       // 8) Define Excel columns (same as placement eligible + mapping fields)
       const combinedColumns = [
         "studentName",
@@ -542,7 +771,14 @@ const mappedStudentController = {
         "tenthPercentage",
         "twelfthPercentage",
         "ugPercentage",
-        "pgPercentage"
+        "pgPercentage",
+        "mappedByName",
+        "mappedByContact",
+        "mappedDate",
+        "acknowledgementStatus",
+        "acknowledgementFeedback",
+        "acknowledgementDate",
+        "lastLogin",
       ];
 
       // 9) Custom header names
@@ -559,7 +795,14 @@ const mappedStudentController = {
         matchScore: "Match Score (%)",
         matchedSkills: "Matched Skills",
         currentStatus: "Interview Status",
-        interviewDate: "Interview Date"
+        interviewDate: "Interview Date",
+        mappedByName: "Mapped By Name",
+        mappedByContact: "Mapped By Contact",
+        mappedDate: "Mapped Date",
+        acknowledgementStatus: "Acknowledgement Status",
+        acknowledgementFeedback: "Acknowledgement Feedback",
+        acknowledgementDate: "Acknowledgement Date",
+
       };
 
       const prettifyHeader = key =>
@@ -580,7 +823,7 @@ const mappedStudentController = {
       }));
 
       // 11) Add rows
-      enrichedData.forEach(row => {
+      finalData.forEach(row => {
         const rowData = {};
 
         combinedColumns.forEach(col => {
@@ -602,7 +845,26 @@ const mappedStudentController = {
               .join(", ");
           } else if (col === "interviewDate") {
             rowData[col] = row[col] ? new Date(row[col]).toLocaleDateString() : "";
-          } else {
+          }
+          else if (col === "mappedDate") {
+            rowData[col] = row[col]
+              ? new Date(row[col]).toLocaleString("en-IN", {
+                timeZone: "Asia/Kolkata",   // ✅ IMPORTANT
+                day: "2-digit",
+                month: "short",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: true               // ✅ AM/PM format
+              })
+              : "";
+          }
+          else if (col === "lastLogin") {
+            rowData[col] = row[col]
+              ? new Date(row[col]).toLocaleString("en-IN", { hour12: true })
+              : "";
+          }
+          else {
             rowData[col] = row[col] && row[col] !== "N/A" ? row[col] : "";
           }
         });
@@ -780,7 +1042,6 @@ const mappedStudentController = {
         });
       }
 
-      // statuses that require feedback
       const FEEDBACK_REQUIRED = [
         'Cancelled',
         'Not Selected',
@@ -788,16 +1049,16 @@ const mappedStudentController = {
         'Rejected the Offer'
       ];
 
-      let newFeedback = null;
-
-      // if status requires feedback, store it
-      if (FEEDBACK_REQUIRED.includes(currentStatus)) {
-        newFeedback = feedback || null;
+      if (FEEDBACK_REQUIRED.includes(currentStatus) && !feedback) {
+        return res.status(400).json({
+          success: false,
+          message: 'Feedback is required for this status'
+        });
       }
 
       await mappedStudent.update({
         currentStatus,
-        feedback: newFeedback,  // <-- always controlled here
+        feedback: feedback ?? null,
         notes: notes ?? mappedStudent.notes
       });
 
@@ -806,6 +1067,27 @@ const mappedStudentController = {
         message: 'Status updated successfully',
         data: mappedStudent
       });
+
+      // 🔔 EMAIL IN BACKGROUND
+      (async () => {
+        try {
+          const student = await StudentRegistration.findOne({
+            where: { studentId: mappedStudent.studentId },
+            attributes: ['email_Id']
+          });
+          if (student?.email_Id) {
+            await sendStatusUpdateEmail(
+              student.email_Id,
+              mappedStudent.studentId,
+              mappedStudent.companyName,
+              currentStatus,
+              feedback || null
+            );
+          }
+        } catch (err) {
+          console.error('Background email error (updateStatus):', err);
+        }
+      })();
 
     } catch (error) {
       console.error('Error updating status:', error);
@@ -817,6 +1099,75 @@ const mappedStudentController = {
     }
   },
 
+  bulkUpdateStatus: async (req, res) => {
+    try {
+      const { mappingIds, currentStatus, feedback } = req.body;
+
+      if (!mappingIds || !Array.isArray(mappingIds) || mappingIds.length === 0) {
+        return res.status(400).json({ success: false, message: 'mappingIds array is required' });
+      }
+      if (!currentStatus) {
+        return res.status(400).json({ success: false, message: 'currentStatus is required' });
+      }
+
+      const FEEDBACK_REQUIRED = ['Cancelled', 'Not Selected', 'Rejected By Student', 'Rejected the Offer'];
+
+      if (FEEDBACK_REQUIRED.includes(currentStatus) && !feedback?.trim()) {
+        return res.status(400).json({ success: false, message: 'Feedback is required for this status' });
+      }
+
+      // ✅ Fetch BEFORE update so studentId + companyName are available for emails
+      const mappings = await MappedStudent.findAll({
+        where: { id: mappingIds },
+        attributes: ['id', 'studentId', 'companyName']
+      });
+
+      await MappedStudent.update(
+        {
+          currentStatus,
+          feedback: feedback?.trim() || null
+        },
+        { where: { id: mappingIds } }
+      );
+
+      res.json({
+        success: true,
+        message: `Status updated for ${mappingIds.length} student(s)`,
+        updatedCount: mappingIds.length
+      });
+
+      // 🔔 EMAILS IN BACKGROUND
+      (async () => {
+        try {
+          const studentIds = mappings.map(m => m.studentId);
+          const students = await StudentRegistration.findAll({
+            where: { studentId: studentIds },
+            attributes: ['studentId', 'email_Id']
+          });
+
+          const emailMap = {};
+          students.forEach(s => { emailMap[s.studentId] = s.email_Id; });
+
+          await Promise.allSettled(
+            mappings.map(mapping => {
+              const email = emailMap[mapping.studentId];
+              if (!email) return Promise.resolve();
+              return sendStatusUpdateEmail(
+                email, mapping.studentId, mapping.companyName,
+                currentStatus, feedback?.trim() || null
+              );
+            })
+          );
+        } catch (err) {
+          console.error('Background email error (bulkUpdateStatus):', err);
+        }
+      })();
+
+    } catch (error) {
+      console.error('Bulk status update error:', error);
+      res.status(500).json({ success: false, message: 'Internal server error', error: error.message });
+    }
+  },
   // PUT - Update status by companyId and studentId
   updateStatusByIds: async (req, res) => {
     try {
@@ -1059,6 +1410,7 @@ const mappedStudentController = {
           createdAt: mapping.createdAt,
           lastStatusUpdate: mapping.lastStatusUpdate,
           statusHistory: mapping.statusHistory,
+          acknowledgementDate: mapping.acknowledgementDate,
           // Additional placement details if needed
           jobRole: placement?.jobRole || null,
           location: placement?.location || null,
@@ -1114,6 +1466,240 @@ const mappedStudentController = {
       });
     }
   },
+  // STUDENT ACKNOWLEDGEMENT
+  acknowledgeMapping: async (req, res) => {
+    try {
+
+      const { mappingId } = req.params;
+
+      const {
+        acknowledgementStatus,   // Accepted / Rejected
+        acknowledgementFeedback
+      } = req.body;
+
+      const studentId = req.student.studentId;
+
+      if (!mappingId)
+        return res.status(400).json({
+          success: false,
+          message: "Mapping ID required"
+        });
+
+      if (!['Accepted', 'Rejected'].includes(acknowledgementStatus))
+        return res.status(400).json({
+          success: false,
+          message: "Invalid acknowledgement status"
+        });
+
+      if (
+        acknowledgementStatus === "Rejected" &&
+        !acknowledgementFeedback
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Feedback is mandatory when rejecting"
+        });
+      }
+
+      const mapping = await MappedStudent.findOne({
+        where: {
+          id: mappingId,
+          studentId
+        }
+      });
+
+      if (!mapping)
+        return res.status(404).json({
+          success: false,
+          message: "Mapping not found"
+        });
+
+      let newAcknowledgementStatus = acknowledgementStatus;
+      let newCurrentStatus = mapping.currentStatus;
+
+      // ===== CASE 1: Mapping acknowledgement =====
+      if (mapping.currentStatus === "Assigned") {
+
+        if (acknowledgementStatus === "Accepted") {
+          newAcknowledgementStatus = "Accepted";
+          newCurrentStatus = "Acknowledged";
+        } else {
+          newAcknowledgementStatus = "Rejected";
+          newCurrentStatus = "Rejected By Student";
+        }
+
+      }
+
+      // ===== CASE 2: Interview confirmation =====
+      else if (mapping.currentStatus === "Interview Scheduled") {
+
+        if (acknowledgementStatus === "Accepted") {
+          newAcknowledgementStatus = "Interview Accepted";
+          newCurrentStatus = "Interview Scheduled"; // keep same
+        } else {
+          newAcknowledgementStatus = "Rejected";
+          newCurrentStatus = "Rejected By Student";
+        }
+
+      }
+
+      await mapping.update({
+
+        acknowledgementStatus: newAcknowledgementStatus,
+
+        acknowledgementFeedback:
+          acknowledgementStatus === "Rejected"
+            ? acknowledgementFeedback
+            : null,
+
+        acknowledgementDate: new Date(),
+
+        currentStatus: newCurrentStatus,
+
+        feedback:
+          acknowledgementStatus === "Rejected"
+            ? acknowledgementFeedback
+            : mapping.feedback
+
+      });
+
+      res.json({
+        success: true,
+        message: `${acknowledgementStatus} successfully`,
+        data: mapping
+      });
+
+    }
+    catch (error) {
+
+      console.error(error);
+
+      res.status(500).json({
+        success: false,
+        message: error.message
+      });
+
+    }
+  },
+
+  getStudentCompanyFullDetails: async (req, res) => {
+    try {
+
+      const { mappingId } = req.params;
+
+      const studentId = req.student?.studentId; // exists for student
+      const staffUser = req.user;               // exists for staff
+
+      let whereClause = { id: mappingId };
+
+      // ✅ If student → restrict to their own mapping
+      if (studentId) {
+        whereClause.studentId = studentId;
+      }
+
+      const mapping = await MappedStudent.findOne({
+        where: whereClause
+      });
+
+      if (!mapping) {
+        return res.status(404).json({
+          success: false,
+          message: "Mapping not found or access denied"
+        });
+      }
+
+      const placement = await Placement.findOne({
+        where: {
+          jobReqId: mapping.companyId
+        }
+      });
+
+      res.json({
+        success: true,
+        data: {
+          mappingDetails: {
+            id: mapping.id,
+            studentId: mapping.studentId,
+            companyName: mapping.companyName,
+            interviewDate: mapping.interviewDate,
+            currentStatus: mapping.currentStatus,
+            feedback: mapping.feedback,
+            acknowledgementStatus: mapping.acknowledgementStatus,
+            acknowledgementDate: mapping.acknowledgementDate,
+            acknowledgementFeedback: mapping.acknowledgementFeedback,
+            mappedDate: mapping.createdAt
+          },
+          placementDetails: placement
+        }
+      });
+
+    } catch (error) {
+
+      console.error(error);
+
+      res.status(500).json({
+        success: false,
+        message: error.message
+      });
+
+    }
+  },
+
+  getStudentNotifications: async (req, res) => {
+    try {
+
+      const studentId = req.student.studentId;
+
+      // 1️⃣ Get all OPEN job requests
+      const openPlacements = await Placement.findAll({
+        where: { jobReqStatus: "Open" },
+        attributes: ["jobReqId"]
+      });
+
+      const openJobIds = openPlacements.map(p => p.jobReqId);
+
+      // 2️⃣ Get notifications
+      const data = await MappedStudent.findAll({
+        where: {
+          studentId,
+          companyId: openJobIds,
+          [Op.or]: [
+            { acknowledgementStatus: "Pending" }, // mapping acknowledgement
+            {
+              currentStatus: "Interview Scheduled",
+              acknowledgementStatus: {
+                [Op.not]: "Interview Accepted"
+              }
+            }
+          ]
+        },
+        order: [["createdAt", "DESC"]],
+        attributes: [
+          "id",
+          "companyName",
+          "createdAt",
+          "acknowledgementStatus",
+          "currentStatus"
+        ]
+      });
+
+      res.json({
+        success: true,
+        data
+      });
+
+    } catch (error) {
+
+      console.error("Error fetching notifications:", error);
+
+      res.status(500).json({
+        success: false,
+        message: "Server error"
+      });
+
+    }
+  },
+
 };
 
 module.exports = mappedStudentController;

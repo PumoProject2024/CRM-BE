@@ -1,16 +1,8 @@
 require("dotenv").config();
-const nodemailer = require("nodemailer");
+const sgMail = require("@sendgrid/mail");
+const { EMAIL_SENDER } = require("../config/mailConfig");
 
-// 📨 Brevo SMTP transporter
-const transporter = nodemailer.createTransport({
-  host: "smtp-relay.brevo.com", // Brevo SMTP server
-  port: 587,
-  secure: false, // use TLS
-  auth: {
-    user: process.env.EMAIL_USER,       // e.g. your Brevo login email
-    pass: process.env.EMAIL_PASSWORD,   // your Brevo SMTP key
-  },
-});
+sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
 /**
  * Sends student login credentials to their email.
@@ -18,8 +10,10 @@ const transporter = nodemailer.createTransport({
  * @param {string} studentId - The student's ID (used as password).
  */
 async function sendStudentCredentials(toEmail, studentId) {
+  console.log("Using FROM email:", process.env.EMAIL_FROM);
+
   if (!toEmail) {
-    console.error("❌ No recipient email provided. Skipping email send.");
+    console.error("❌ No recipient email provided.");
     return;
   }
 
@@ -32,9 +26,9 @@ async function sendStudentCredentials(toEmail, studentId) {
 
   const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
 
-  const mailOptions = {
-    from: process.env.EMAIL_FROM || "noreply@pumotechnovationcrm.com", // ✅ Verified domain sender
+  const msg = {
     to: toEmail,
+    from: EMAIL_SENDER,
     subject: "Your Student Account Credentials - Pumo Technovation",
     html: `
       <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
@@ -45,10 +39,13 @@ async function sendStudentCredentials(toEmail, studentId) {
           <li><strong>Email:</strong> ${toEmail}</li>
           <li><strong>Password:</strong> ${studentId}</li>
         </ul>
-        <p>You can log in here:
+        <p>
+          You can log in here:
           <a href="${frontendUrl}" target="_blank">${frontendUrl}</a>
         </p>
-        <p style="color:red;">Please change your password after your first login.</p>
+        <p style="color:red;">
+          Please change your password after your first login.
+        </p>
         <br/>
         <p>Best regards,<br/><strong>Pumo Technovation Team</strong></p>
       </div>
@@ -56,11 +53,19 @@ async function sendStudentCredentials(toEmail, studentId) {
   };
 
   try {
-    const info = await transporter.sendMail(mailOptions);
-    console.log(`✅ Student email sent to ${toEmail}: ${info.response}`);
+    const response = await sgMail.send(msg);
+
+    console.log("✅ SendGrid student email sent to:", toEmail);
+    console.log("📨 SendGrid Status Code:", response[0].statusCode);
+    console.log("📨 SendGrid Headers:", response[0].headers);
+
   } catch (error) {
-    console.error("❌ Email send error:", error.message);
+    console.error("❌ SendGrid Error:");
+    console.error("Status Code:", error.code);
+    console.error("Response Body:", error.response?.body);
+    console.error("Message:", error.message);
   }
+
 }
 
 module.exports = { sendStudentCredentials };

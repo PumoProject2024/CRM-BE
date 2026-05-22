@@ -67,7 +67,10 @@ const Placement = sequelize.define('Placement', {
     type: DataTypes.STRING,
     allowNull: false,
   },
-
+  gender: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
   passedOutYear: {
     type: DataTypes.STRING,
     allowNull: false,
@@ -164,6 +167,14 @@ const Placement = sequelize.define('Placement', {
   },
   feedbackForClosure: {
     type: DataTypes.TEXT,
+    allowNull: true,
+  },
+  feedbackForFreeze: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+  },
+  totalSelectionCount: {
+    type: DataTypes.INTEGER,
     allowNull: true,
   },
   createdContact: {

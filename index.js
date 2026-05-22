@@ -2,6 +2,7 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 require('dotenv').config();
+require('./models');
 const sequelize = require('./config/database');
 const studentRegistrationRoutes = require('./routes/routes');
 const authRoutes = require('./routes/authRoutes');

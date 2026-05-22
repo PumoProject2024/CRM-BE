@@ -10,6 +10,22 @@ const JobRequirementView = sequelize.define("JobRequirementView", {
     type: DataTypes.INTEGER,
     allowNull: false
   },
+  emp_name: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  emp_feedback: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+  branch: {
+    type: DataTypes.JSON,
+    allowNull: true
+  },
+  contact_num: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
   viewedAt: {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW

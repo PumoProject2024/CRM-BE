@@ -13,6 +13,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@sendgrid/mail": "^8.1.6",
     "archiver": "^7.0.1",
     "bcrypt": "^5.1.1",
     "compression": "^1.8.0",
@@ -20,11 +21,13 @@
     "dotenv": "^16.4.7",
     "exceljs": "^4.4.0",
     "express": "^4.21.2",
+    "firebase-admin": "^13.6.1",
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.0.2",
     "nodemailer": "^6.10.0",
     "pg": "^8.13.3",
     "pg-hstore": "^2.3.4",
+    "pptxgenjs": "^4.0.1",
     "sequelize": "^6.37.6",
     "winston": "^3.18.3",
     "xlsx": "^0.18.5"

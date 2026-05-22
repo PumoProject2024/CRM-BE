@@ -221,6 +221,10 @@ const StudentCourse = sequelize.define('StudentCourse', {
     type: DataTypes.STRING,
     allowNull: true
   },
+  readyForPlacementDate: {
+    type: DataTypes.DATE,
+    allowNull: true
+  },
   stuapprove: {
     type: DataTypes.BOOLEAN,
     allowNull: false,
@@ -351,7 +355,10 @@ const StudentCourse = sequelize.define('StudentCourse', {
     type: DataTypes.STRING,
     allowNull: true,
     defaultValue: "Awaiting for placement"
-
+  },
+  placementRemarks: {
+    type: DataTypes.STRING,
+    allowNull: true,
   },
   companyName: {
     type: DataTypes.STRING,
@@ -443,7 +450,20 @@ const StudentCourse = sequelize.define('StudentCourse', {
     type: DataTypes.STRING,
     allowNull: true,
   },
-
+  placementStatusChangedBy: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  placementStatusChangedAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+  },
+  mappingCount: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    defaultValue: 0,
+    comment: 'Total number of times this student has been mapped to a company'
+  },
 }, {
   tableName: 'student_courses',
   timestamps: true

@@ -24,6 +24,16 @@ const MappedStudent = sequelize.define('MappedStudent', {
     allowNull: false,
   },
 
+  mappedByName: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+
+  mappedByContact: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+
   interviewDate: {
     type: DataTypes.DATEONLY,
     allowNull: true,
@@ -62,6 +72,23 @@ const MappedStudent = sequelize.define('MappedStudent', {
     allowNull: true,
     defaultValue: null,
     comment: 'Additional notes or remarks'
+  },
+
+  acknowledgementStatus: {
+    type: DataTypes.STRING,
+    allowNull: false,
+    defaultValue: 'Pending',
+    // Pending | Accepted | Rejected
+  },
+
+  acknowledgementFeedback: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+
+  acknowledgementDate: {
+    type: DataTypes.DATE,
+    allowNull: true
   },
 
 }, {

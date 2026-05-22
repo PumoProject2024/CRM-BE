@@ -1,94 +1,123 @@
 const Employee = require("../models/Employee");
+const StudentRegistration = require("../models/studenReg");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const { Op } = require('sequelize');
-const nodemailer = require("nodemailer");
+const sgMail = require("@sendgrid/mail");
 
-// Configure email transporter
-const transporter = nodemailer.createTransport({
-  service: process.env.EMAIL_SERVICE || "gmail", // e.g., "gmail"
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASSWORD
+// ─────────────────────────────────────────────────────────────────────────────
+// Helper: find user from either Employee or Student table by email
+// Returns { user, type } where type is "employee" or "student"
+// ─────────────────────────────────────────────────────────────────────────────
+const findUserByEmail = async (email) => {
+  const employee = await Employee.findOne({ where: { email_id: email } });
+  if (employee) return { user: employee, type: "employee" };
+
+  const student = await StudentRegistration.findOne({ where: { email_Id: email } });
+  if (student) return { user: student, type: "student" };
+
+  return null;
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helper: find user from either table by id + valid reset token
+// ─────────────────────────────────────────────────────────────────────────────
+const findUserByIdAndToken = async (id, userType) => {
+  const condition = {
+    reset_token: { [Op.ne]: null },
+    reset_token_expires: { [Op.gt]: new Date() },
+  };
+
+  if (userType === "employee") {
+    return await Employee.findOne({ where: { emp_id: id, ...condition } });
+  } else if (userType === "student") {
+    return await StudentRegistration.findOne({ where: { id, ...condition } });
   }
-});
 
-// Request password reset
+  return null;
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Request Password Reset
+// POST /api/auth/request-reset
+// Body: { email }
+// ─────────────────────────────────────────────────────────────────────────────
 exports.requestPasswordReset = async (req, res) => {
   try {
     const { email_id } = req.body;
+    const email = email_id;
+    // Check employee table first, then student table
+    const found = await findUserByEmail(email);
 
-    // Check if employee exists
-    const employee = await Employee.findOne({ where: { email_id } });
-
-    if (!employee) {
+    if (!found) {
       return res.status(404).json({ message: "No account found with that email" });
     }
 
-    // Generate reset token
-    const resetToken = crypto.randomBytes(32).toString('hex');
+    const { user, type } = found;
 
-    // Hash the reset token for storage
+    // Generate raw reset token
+    const resetToken = crypto.randomBytes(32).toString("hex");
+
+    // Hash token for secure storage
     const hashedToken = await bcrypt.hash(resetToken, 10);
 
-    // Set token and expiry in database
-    await Employee.update(
-      {
-        reset_token: hashedToken,
-        reset_token_expires: new Date(Date.now() + 5 * 60 * 1000) // 5 minutes
-      },
-      { where: { emp_id: employee.emp_id } }
-    );
+    const tokenData = {
+      reset_token: hashedToken,
+      reset_token_expires: new Date(Date.now() + 5 * 60 * 1000), // 5 minutes
+    };
 
-    // Create reset URL
-    const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${employee.emp_id}/${resetToken}`;
+    // Determine primary key and reset URL based on user type
+    let userId, resetUrl;
+
+    if (type === "employee") {
+      userId = user.emp_id;
+      await Employee.update(tokenData, { where: { emp_id: userId } });
+      resetUrl = `${process.env.FRONTEND_URL}/password/reset/${type}/${userId}/${resetToken}`;
+    } else {
+      userId = user.id;
+      await StudentRegistration.update(tokenData, { where: { id: userId } });
+      resetUrl = `${process.env.FRONTEND_URL}/password/reset/${type}/${userId}/${resetToken}`;
+    }
 
     // ✅ DEVELOPMENT LOGGING
-    console.log("🔐 Password Reset Token Generated:");
-    console.log("EMP_ID:", employee.emp_id);
+    console.log(`🔐 Password Reset Token Generated [${type.toUpperCase()}]:`);
+    console.log("ID:", userId);
     console.log("Raw Token (for Postman):", resetToken);
     console.log("Reset URL:", resetUrl);
 
-    // Send email with reset link
-    const mailOptions = {
-      from: `"Pumo Tech Support" <${process.env.EMAIL_USER}>`,
-      to: email_id,
+    // Send reset email
+    const msg = {
+      to: email,
+      from: process.env.EMAIL_FROM,
       subject: "Password Reset Request",
       html: `
-        <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+        <div style="font-family: Arial, sans-serif;">
           <h2>Password Reset Request</h2>
-          <p>Hello,</p>
-          <p>You requested a password reset for your account.</p>
-          <p>
-            Click the link below to reset your password. This link is valid for 1 hour:
-          </p>
-          <a href="${resetUrl}" target="_blank" style="
-            display: inline-block;
-            padding: 10px 20px;
-            margin: 20px 0;
-            background-color: #4CAF50;
-            color: white;
-            text-decoration: none;
-            border-radius: 5px;">
-            Reset Password
+          <p>Hello ${user.name || "User"},</p>
+          <p>You requested a password reset.</p>
+          <p>This link is valid for <strong>5 minutes</strong>:</p>
+          <a href="${resetUrl}"
+             style="display:inline-block;padding:10px 20px;background:#4CAF50;color:#fff;text-decoration:none;border-radius:5px;">
+             Reset Password
           </a>
-          <p>If you didn’t request this, you can safely ignore this email.</p>
-          <p>Thank you,<br>Pumo Tech Team</p>
+          <p>If you didn't request this, ignore this email.</p>
+          <br/>
+          <p>Pumo Technovation Team</p>
         </div>
       `,
     };
 
-    await transporter.sendMail(mailOptions);
+    await sgMail.send(msg);
 
     res.status(200).json({
       message: "Password reset link sent to your email",
       success: true,
-      emp_id: employee.emp_id,
-      resetToken, // raw token
-      resetUrl    // complete frontend reset URL
+      userType: type,       // "employee" or "student"
+      userId,
+      resetToken,           // raw token (remove in production)
+      resetUrl,             // full reset URL (remove in production)
     });
-
 
   } catch (error) {
     console.error("Password reset request error:", error);
@@ -96,33 +125,30 @@ exports.requestPasswordReset = async (req, res) => {
   }
 };
 
-
-// Verify reset token
+// ─────────────────────────────────────────────────────────────────────────────
+// Verify Reset Token
+// GET /api/auth/verify-token/:userType/:id/:token
+// ─────────────────────────────────────────────────────────────────────────────
 exports.verifyResetToken = async (req, res) => {
   try {
-    const { emp_id, token } = req.params;
+    const { userType, id, token } = req.params;
 
-    // Find the employee
-    const employee = await Employee.findOne({
-      where: {
-        emp_id,
-        reset_token: { [Op.ne]: null },
-        reset_token_expires: { [Op.gt]: new Date() }
-      }
-    });
+    if (!["employee", "student"].includes(userType)) {
+      return res.status(400).json({ message: "Invalid user type" });
+    }
 
-    if (!employee) {
+    const user = await findUserByIdAndToken(id, userType);
+
+    if (!user) {
       return res.status(400).json({ message: "Invalid or expired reset token" });
     }
 
-    // Verify the token matches
-    const isValidToken = await bcrypt.compare(token, employee.reset_token);
+    const isValidToken = await bcrypt.compare(token, user.reset_token);
 
     if (!isValidToken) {
       return res.status(400).json({ message: "Invalid reset token" });
     }
 
-    // Token is valid
     res.status(200).json({ message: "Token verified, proceed to reset password" });
 
   } catch (error) {
@@ -131,59 +157,66 @@ exports.verifyResetToken = async (req, res) => {
   }
 };
 
-// Reset password
+// ─────────────────────────────────────────────────────────────────────────────
+// Reset Password
+// POST /api/auth/reset-password
+// Body: { userType, id, token, newPassword }
+// ─────────────────────────────────────────────────────────────────────────────
 exports.resetPassword = async (req, res) => {
   try {
-    const { emp_id, token, newPassword } = req.body;
+    const { userType, id, token, newPassword } = req.body;
 
-    // Find the employee
-    const employee = await Employee.findOne({
-      where: {
-        emp_id,
-        reset_token: { [Op.ne]: null },
-        reset_token_expires: { [Op.gt]: new Date() }
-      }
-    });
+    if (!["employee", "student"].includes(userType)) {
+      return res.status(400).json({ message: "Invalid user type" });
+    }
 
-    if (!employee) {
+    const user = await findUserByIdAndToken(id, userType);
+
+    if (!user) {
       return res.status(400).json({ message: "Invalid or expired reset token" });
     }
 
-    // Verify the token matches
-    const isValidToken = await bcrypt.compare(token, employee.reset_token);
+    const isValidToken = await bcrypt.compare(token, user.reset_token);
 
     if (!isValidToken) {
       return res.status(400).json({ message: "Invalid reset token" });
     }
 
-    // Hash the new password
+    // Hash new password
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-    // Update the employee record
-    await Employee.update(
-      {
-        password: hashedPassword,
-        reset_token: null,
-        reset_token_expires: null
-      },
-      { where: { emp_id: employee.emp_id } }
-    );
-
-    // Send confirmation email
-    const mailOptions = {
-      from: process.env.EMAIL_FROM || "noreply@yourcompany.com",
-      to: employee.email_id,
-      subject: "Password Reset Successful",
-      html: `
-        <h1>Password Reset Successful</h1>
-        <p>Your password has been successfully reset.</p>
-        <p>If you did not perform this action, please contact support immediately.</p>
-        <p>Thank you,</p>
-        <p>Your Company Team</p>
-      `
+    const clearedTokenData = {
+      password: hashedPassword,
+      reset_token: null,
+      reset_token_expires: null,
     };
 
-    await transporter.sendMail(mailOptions);
+    // Update correct table
+    if (userType === "employee") {
+      await Employee.update(clearedTokenData, { where: { emp_id: user.emp_id } });
+    } else {
+      await StudentRegistration.update(clearedTokenData, { where: { id: user.id } });
+    }
+
+    // Get the correct email field based on user type
+    const userEmail = userType === "employee" ? user.email_id : user.email_Id;
+
+    // Send confirmation email
+    await sgMail.send({
+      to: userEmail,
+      from: process.env.EMAIL_FROM,
+      subject: "Password Reset Successful",
+      html: `
+        <div style="font-family: Arial, sans-serif;">
+          <h2>Password Reset Successful</h2>
+          <p>Hello ${user.name || "User"},</p>
+          <p>Your password has been changed successfully.</p>
+          <p>If this wasn't you, contact support immediately.</p>
+          <br/>
+          <p>Pumo Technovation Team</p>
+        </div>
+      `,
+    });
 
     res.status(200).json({ message: "Password has been reset successfully" });
 

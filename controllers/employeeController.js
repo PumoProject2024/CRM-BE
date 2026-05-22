@@ -43,7 +43,6 @@ exports.createEmployee = async (req, res) => {
   }
 };
 
-
 // Login Employee
 
 exports.loginEmployee = async (req, res) => {
@@ -60,7 +59,13 @@ exports.loginEmployee = async (req, res) => {
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
-    // ❌ Removed the BDE access check
+    await Employee.update(
+      { lastLogin: new Date() },
+      { where: { emp_id: employee.emp_id } }
+    );
+
+    const check = await Employee.findOne({ where: { emp_id: employee.emp_id } });
+    console.log("DB lastLogin:", check.lastLogin);
 
     const token = jwt.sign(
       {
@@ -69,7 +74,8 @@ exports.loginEmployee = async (req, res) => {
         role: employee.role,
         branch: employee.branch,
         has_access: employee.has_access,
-        contact_num: employee.contact_num
+        contact_num: employee.contact_num,
+        Department: employee.Department
       },
       process.env.JWT_SECRET,
       { expiresIn: "8h" }
@@ -159,8 +165,6 @@ exports.getEmployees = async (req, res) => {
   }
 };
 
-
-
 // Get All Employee Details (No filters)
 // controllers/employeeController.js
 exports.getAllEmployeeDetails = async (req, res) => {
@@ -199,17 +203,17 @@ exports.getAllEmployeeDetails = async (req, res) => {
     // Search functionality for name, email, and role
     if (searchQuery) {
       const validRoles = ["BDE", "Trainer", "Placement officer", "Branch-head", "CEO", "Super-Admin"];
-      
+
       const searchConditions = [];
 
       // Name search
       searchConditions.push({ emp_name: { [Op.iLike]: `%${searchQuery}%` } });
-      
+
       // Email search  
       searchConditions.push({ email_id: { [Op.iLike]: `%${searchQuery}%` } });
 
       // Role search - try multiple approaches
-      const matchingRoles = validRoles.filter(r => 
+      const matchingRoles = validRoles.filter(r =>
         r.toLowerCase() === searchQuery.toLowerCase() ||
         r.toLowerCase().includes(searchQuery.toLowerCase()) ||
         searchQuery.toLowerCase().includes(r.toLowerCase())
@@ -297,7 +301,7 @@ exports.getAllEmployeeDetails = async (req, res) => {
     console.log(`📊 Query result: Found ${count} employees, returning ${employees.length} employees`);
 
     if (!employees || employees.length === 0) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         message: "No employees found.",
         debugInfo: {
           searchQuery,
@@ -443,7 +447,7 @@ exports.getTrainerEmployees = async (req, res) => {
           })
         ]
       },
-      attributes: ["emp_id", "emp_name", "branch","contact_num"]
+      attributes: ["emp_id", "emp_name", "branch", "contact_num"]
     });
 
     res.status(200).json(employees.map(emp => emp.dataValues));
@@ -467,6 +471,20 @@ exports.getPlacementOfficerNames = async (req, res) => {
     res.status(200).json(employees.map(emp => emp.emp_name));
   } catch (error) {
     console.error("Error fetching Placement Officer names:", error);
+    res.status(500).json({ error: error.message });
+  }
+};
+exports.getEmployeeNames = async (req, res) => {
+  try {
+    const employees = await Employee.findAll({
+      attributes: ["emp_name"]
+    });
+
+    res.status(200).json(
+      employees.map(emp => emp.emp_name)
+    );
+  } catch (error) {
+    console.error("Error fetching employee names:", error);
     res.status(500).json({ error: error.message });
   }
 };

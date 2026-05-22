@@ -18,7 +18,7 @@ const Employee = sequelize.define("Employee", {
     type: DataTypes.ENUM("BDE", "Trainer", "Placement officer", "Branch-head", "CEO", "Super-Admin"),
     allowNull: false,
   },
-  department: {
+  organization: {
     type: DataTypes.JSON,
     allowNull: false,
   },
@@ -54,7 +54,7 @@ const Employee = sequelize.define("Employee", {
     allowNull: false,
   },
   reset_token: {
-    type: DataTypes.STRING,
+    type: DataTypes.TEXT,
     allowNull: true,
   },
   reset_token_expires: {
@@ -69,7 +69,18 @@ const Employee = sequelize.define("Employee", {
     type: DataTypes.BOOLEAN,
     defaultValue: false,
   },
-
+  lastLogin: {
+    type: DataTypes.DATE,
+    allowNull: true
+  },
+  Department: {
+    type: DataTypes.JSON,
+    allowNull: true,
+  },
+  reportingManagerEmail: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
 });
 
 module.exports = Employee;
