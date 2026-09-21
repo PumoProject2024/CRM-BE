@@ -5,7 +5,6 @@ const { sendUnmappingEmail } = require("../utils/sendUnmappingEmail");
 const { sendStatusUpdateEmail } = require('../utils/sendStatusUpdateEmail');
 const StudentRegistration = require('../models/studenReg');
 const Placement = require('../models/Placement');
-const admin = require('../firebaseAdmin');
 const { Op } = require('sequelize');
 const ExcelJS = require('exceljs');
 const logger = require("../logger");
