@@ -92,7 +92,7 @@ const MappedStudent = sequelize.define('MappedStudent', {
   },
 
 }, {
-  tableName: 'MappedStudents',
+  tableName: 'mappedstudents',
   timestamps: true,
   indexes: [
     {

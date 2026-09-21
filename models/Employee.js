@@ -81,6 +81,8 @@ const Employee = sequelize.define("Employee", {
     type: DataTypes.STRING,
     allowNull: true,
   },
+}, {
+  tableName: "employees",
 });
 
 module.exports = Employee;

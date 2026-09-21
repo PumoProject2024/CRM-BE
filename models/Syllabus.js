@@ -34,7 +34,7 @@ const Syllabus = sequelize.define('Syllabus', {
         allowNull: false,
     },
 }, {
-    tableName: 'Syllabus',
+    tableName: 'syllabus',
     timestamps: true
 });
 

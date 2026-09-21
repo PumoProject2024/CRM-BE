@@ -26,7 +26,7 @@ const Technology = sequelize.define('Technology', {
         }
     }
 }, {
-    tableName: 'Technology',
+    tableName: 'technology',
     timestamps: true
 });
 

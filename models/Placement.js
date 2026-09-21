@@ -182,7 +182,7 @@ const Placement = sequelize.define('Placement', {
   },
 
 }, {
-  tableName: 'Placements',
+  tableName: 'placements',
   timestamps: true
 });
 
