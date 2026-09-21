@@ -145,7 +145,6 @@ const Placement = sequelize.define('Placement', {
     type: DataTypes.TEXT,
     allowNull: true,
   },
-
   companyHRName: {
     type: DataTypes.STRING,
     allowNull: true,

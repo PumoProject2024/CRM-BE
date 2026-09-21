@@ -84,81 +84,7 @@ const mappedStudentController = {
         message: "Student successfully mapped to company",
         data: newMappedStudent
       });
-      // ====================================================
-      // 🔔 PUSH + EMAIL IN BACKGROUND (NO API DELAY)
-      // ====================================================
-      (async () => {
-        try {
-          // =====================
-          // PUSH NOTIFICATION
-          // =====================
-          const tokens = await StudentDeviceToken.findAll({
-            where: { studentId },
-            attributes: ["token"]
-          });
-          const tokenList = tokens.map(t => t.token);
-          console.log("TOKENS:", tokenList);
-          if (tokenList.length > 0) {
-            const response =
-              await admin.messaging().sendEachForMulticast({
-                tokens: tokenList,
-                notification: {
-                  title: "🎯 Interview Opportunity Assigned",
-                  body:
-                    `${companyName} has shortlisted you. Check your interview details now.`
-                },
-                data: {
-                  companyId: String(companyId),
-                  studentId: String(studentId),
-                  type: "INTERVIEW_ASSIGNED"
-                },
-                webpush: {
-                  notification: {
-                    icon: "/images/logo.png"
-                  },
-                  fcmOptions: {
-                    link: "https://pumotechnovationcrm.com/login"
-                  }
-                }
-              });
-            // remove invalid tokens
-            for (let i = 0; i < response.responses.length; i++) {
-              if (!response.responses[i].success) {
-                await StudentDeviceToken.destroy({
-                  where: { token: tokenList[i] }
-                });
-              }
-            }
-          }
-          else {
-            console.log("No tokens found");
-          }
-          // =====================
-          // EMAIL
-          // =====================
-          const student = await StudentRegistration.findOne({
-            where: { studentId },
-            attributes: ["email_Id"]
-          });
-          if (student?.email_Id) {
-            await sendMappingEmail(
-              student.email_Id,
-              studentId,
-              companyName,
-              interviewDate,
-              newMappedStudent.mappedByName,
-              newMappedStudent.mappedByContact
-            );
-          }
-          else {
-            console.log("No student email found");
-          }
-        }
-        catch (err) {
-          console.error("Background notification/email error:", err);
-        }
-      })();
-    }
+         }
     catch (error) {
 
       console.error("Error mapping student:", error);
@@ -193,23 +119,7 @@ const mappedStudentController = {
         });
       }
 
-      // get student email
-      const student = await StudentRegistration.findOne({
-        where: { studentId: mappedStudent.studentId },
-      });
-
-      // send email BEFORE delete
-      if (student?.email_Id) {
-        await sendUnmappingEmail(
-          student.email_Id,
-          mappedStudent.studentId,
-          mappedStudent.companyName,
-          mappedStudent.mappedByName,
-          mappedStudent.mappedByContact
-        );
-      }
-
-      // delete mapping
+           // delete mapping
       await mappedStudent.destroy();
 
       // ✅ Decrement mappingCount (floor at 0)
@@ -298,9 +208,9 @@ const mappedStudentController = {
 
       const skillsToMatch = placement?.skillSet
         ? placement.skillSet
-          .split(",")
+          .split(/,|\|\|/)
           .map(s => s.trim().toLowerCase())
-          .filter(Boolean)
+          .filter(s => s && s !== "null")
         : [];
 
       // 🔹 2) get mapped students with filters
@@ -359,6 +269,7 @@ const mappedStudentController = {
           "pgPassout",
           "knownSkill",
           "experience",
+	  "diplomaDegree",
           "diplomaDepartment",
           "diplomaPassout",
           "ugDepartment",
@@ -1430,6 +1341,88 @@ const mappedStudentController = {
         success: false,
         message: 'Internal server error',
         error: error.message
+      });
+    }
+  },
+  getStudentHistoryWithoutAssignedAndAcknowledged: async (req, res) => {
+    try {
+      const { studentId } = req.params;
+
+      if (!studentId) {
+        return res.status(400).json({
+          success: false,
+          message: "Student ID is required",
+        });
+      }
+
+      // Get mappings except Assigned and Acknowledged
+      const mappings = await MappedStudent.findAll({
+        where: {
+          studentId,
+          currentStatus: {
+            [Op.notIn]: ["Assigned", "Acknowledged","Cancelled"],
+          },
+        },
+        order: [["createdAt", "DESC"]],
+      });
+
+      if (!mappings.length) {
+        return res.json({
+          success: true,
+          message: "No placement history found for this student",
+          data: [],
+        });
+      }
+
+      const companyIds = [...new Set(mappings.map((m) => m.companyId))];
+
+      const placements = await Placement.findAll({
+        where: {
+          jobReqId: {
+            [Op.in]: companyIds,
+          },
+        },
+      });
+
+      const placementMap = {};
+      placements.forEach((p) => {
+        placementMap[p.jobReqId] = p;
+      });
+
+      const history = mappings.map((mapping) => {
+        const placement = placementMap[mapping.companyId];
+
+        return {
+          id: mapping.id,
+          companyName: mapping.companyName,
+          companyId: mapping.companyId,
+          interviewDate: mapping.interviewDate,
+          currentStatus: mapping.currentStatus,
+          feedback: mapping.feedback,
+          notes: mapping.notes,
+          createdAt: mapping.createdAt,
+          lastStatusUpdate: mapping.lastStatusUpdate,
+          statusHistory: mapping.statusHistory,
+          acknowledgementDate: mapping.acknowledgementDate,
+
+          jobRole: placement?.jobRole || null,
+          location: placement?.location || null,
+          package: placement?.package || null,
+        };
+      });
+
+      res.json({
+        success: true,
+        data: history,
+        totalMappings: history.length,
+      });
+    } catch (error) {
+      console.error("Error fetching student history:", error);
+
+      res.status(500).json({
+        success: false,
+        message: "Internal server error",
+        error: error.message,
       });
     }
   },

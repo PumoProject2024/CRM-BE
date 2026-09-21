@@ -4,6 +4,7 @@ const JobRequirementView = require('../models/JobRequirementView');
 const StudentCourse = require("../models/StudentCourse");
 const { Sequelize, Op } = require('sequelize');
 const Employee = require('../models/Employee');
+const { sendWhatsAppTemplate } = require('../utils/sendWhatsApp');
 const { sendPlacementNotification, sendPlacementUpdateNotification } = require('../utils/sendPlacementNotification');
 const { sendPlacementUpdateStudentEmail } = require("../utils/sendPlacementUpdateStudentEmail");
 const { sendPlacementClosureSummaryEmail } = require("../utils/sendPlacementClosureSummaryEmail");
@@ -341,7 +342,15 @@ exports.updatePlacement = async (req, res) => {
     try {
 
       const allStaff = await Employee.findAll({
-        attributes: ['email_id', 'emp_name', 'Department', 'branch']
+        where: {
+          has_access: true
+        },
+        attributes: [
+          'email_id',
+          'emp_name',
+          'Department',
+          'branch'
+        ]
       });
 
       const placementDepartment =
@@ -471,106 +480,7 @@ exports.updatePlacement = async (req, res) => {
         mailErr
       );
     }
-    // ==============================
-    // SEND MAIL TO MAPPED STUDENTS
-    // ==============================
-
-    try {
-
-      const mappedStudents = await MappedStudent.findAll({
-        where: {
-          companyId: jobReqId,
-          currentStatus: {
-            [Op.ne]: "Rejected By Student"
-          }
-        }
-      });
-
-      if (mappedStudents.length > 0) {
-
-        const studentIds = mappedStudents.map(
-          s => s.studentId
-        );
-
-        const studentDetails =
-          await StudentCourse.findAll({
-
-            where: {
-              studentId: {
-                [Op.in]: studentIds
-              }
-            },
-
-            attributes: [
-              "studentId",
-              "studentName",
-              "email_Id"
-            ]
-          });
-
-        const recipients = studentDetails
-          .map(student => ({
-            email: student.email_Id,
-            name: student.studentName
-          }))
-          .filter(student => student.email);
-
-        if (
-          recipients.length > 0 &&
-          shouldSendStudentMail
-        ) {
-
-          if (isClosureMail) {
-
-            await sendPlacementClosureStudentEmail(
-              recipients,
-              {
-                companyName:
-                  updatedPlacement.companyName,
-
-                jobTitle:
-                  updatedPlacement.jobTitle,
-
-                jobReqStatus:
-                  updatedPlacement.jobReqStatus
-              }
-            );
-
-          } else {
-
-            await sendPlacementUpdateStudentEmail(
-              recipients,
-              {
-                jobReqId:
-                  updatedPlacement.jobReqId,
-
-                companyName:
-                  updatedPlacement.companyName,
-
-                jobTitle:
-                  updatedPlacement.jobTitle,
-
-                updatedFields:
-                  filteredUpdatedFields
-              }
-            );
-          }
-
-          console.log(
-            "✅ Student update mails sent"
-          );
-        }
-      }
-
-    } catch (studentMailErr) {
-
-      console.error(
-        "❌ Student mail error:",
-        studentMailErr
-      );
-    }
-
-    const response = {
+       const response = {
       message: 'Job requirement updated successfully',
       data: updatedPlacement,
       updatedBy: {
@@ -737,6 +647,7 @@ exports.getClosureSummary = async (req, res) => {
     });
   }
 };
+
 exports.getClosureSummaryData = async (jobReqId) => {
 
   const mappedStudents =
@@ -808,6 +719,7 @@ exports.getClosureSummaryData = async (jobReqId) => {
     students
   };
 };
+
 exports.createPlacement = async (req, res) => {
   try {
     const {
@@ -926,7 +838,16 @@ exports.createPlacement = async (req, res) => {
     if (department) {
       try {
         const allStaff = await Employee.findAll({
-          attributes: ['email_id', 'emp_name', 'Department', 'branch']
+          where: {
+            has_access: true
+          },
+          attributes: [
+            'email_id',
+            'emp_name',
+            'Department',
+            'branch',
+	    'contact_num'
+          ]
         });
 
         const filteredStaff = allStaff.filter(emp => {
@@ -996,6 +917,43 @@ exports.createPlacement = async (req, res) => {
           console.log("✅ Emails sent:", recipients.map(r => r.email));
         } else {
           console.warn("⚠️ No matching staff found for department:", department);
+        }
+	 // 🔹 Send WhatsApp notification to matching staff
+        const whatsappRecipients = filteredStaff
+          .map(emp => ({
+            contact: emp.contact_num,
+            name: emp.emp_name
+          }))
+          .filter(emp => emp.contact);
+
+        if (whatsappRecipients.length > 0) {
+          for (const staff of whatsappRecipients) {
+            try {
+              let waNumber = staff.contact.toString().replace(/\D/g, '');
+              if (waNumber.length === 10) {
+                waNumber = '91' + waNumber;
+              }
+
+              await sendWhatsAppTemplate(
+                waNumber,
+                'job_opening_notification',
+                'en',
+                [
+                  jobTitle,
+                  companyName,
+                  department,
+                  jobLocation || 'N/A',
+                  interviewDate || 'TBD'
+                ]
+              );
+
+              console.log(`✅ WhatsApp sent to ${staff.name} (${waNumber})`);
+            } catch (waErr) {
+              console.error(`❌ WhatsApp failed for ${staff.name}:`, waErr.response?.data || waErr.message);
+            }
+          }
+        } else {
+          console.warn("⚠️ No matching staff phone numbers found for WhatsApp");
         }
 
       } catch (err) {
@@ -1514,6 +1472,15 @@ exports.downloadPlacementsExcel = async (req, res) => {
       { header: "Total Selection Count", key: "totalSelectionCount", width: 15 },
       { header: "Created By", key: "createdBy", width: 20 },
       { header: "Created At", key: "createdAt", width: 22 },
+      ...(
+        req.user.role === "Super-Admin" || req.user.emp_id == "5283"
+          ? [
+            { header: "HR Name", key: "companyHRName", width: 22 },
+            { header: "HR Contact", key: "companyHRContact", width: 18 },
+            { header: "HR Email", key: "companyHREmail", width: 30 },
+          ]
+          : []
+      ),
 
     ];
     const headerRow = worksheet.getRow(1);
@@ -1558,6 +1525,9 @@ exports.downloadPlacementsExcel = async (req, res) => {
         feedbackForClosure: r.feedbackForClosure,
         totalSelectionCount: r.totalSelectionCount,
         createdBy: r.createdBy,
+        companyHRName: r.companyHRName,
+        companyHRContact: r.companyHRContact,
+        companyHREmail: r.companyHREmail,
         createdAt: r.createdAt
           ? new Date(r.createdAt).toLocaleString("en-GB", {
             timeZone: "Asia/Kolkata",
@@ -1930,7 +1900,6 @@ exports.getOldOpenRequirements = async (req, res) => {
   }
 };
 
-
 exports.sendEscalationMail = async (req, res) => {
 
   try {
@@ -1996,4 +1965,59 @@ exports.sendEscalationMail = async (req, res) => {
 
   }
 
+};
+
+exports.getMyOpenRequirements = async (req, res) => {
+  try {
+
+    const loggedInUser = req.user.emp_name;
+
+    const requirements = await Placement.findAll({
+      where: {
+        createdBy: loggedInUser,
+
+        jobReqStatus: {
+          [Op.in]: ["Open", "Freeze"]
+        }
+      },
+
+      attributes: [
+        "id",
+        "jobReqId",
+        "companyName",
+        "jobTitle",
+        "jobLocation",
+        "jobReqStatus",
+        "salary",
+        "skillSet",
+        "qualification",
+        "passedOutYear",
+        "bond",
+        "experienceRequired",
+        "interviewType",
+        "numberOfOpenings",
+        "createdAt",
+        "createdBy"
+      ],
+
+      order: [
+        ["createdDate", "DESC"]
+      ]
+    });
+
+    res.status(200).json({
+      success: true,
+      count: requirements.length,
+      data: requirements
+    });
+
+  } catch (error) {
+
+    console.error(error);
+
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
 };

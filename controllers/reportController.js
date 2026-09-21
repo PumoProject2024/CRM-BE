@@ -14,7 +14,7 @@ exports.getPlacedStudentsReport = async (req, res) => {
             courseNames,
             placedBy,
             packageRange,
-            placementStatusFilter = "Placed",
+            placementStatusFilter = "All",
             placementDateFrom,
             placementDateTo
         } = req.query;
@@ -385,7 +385,7 @@ exports.getJobRequirementDetails = async (req, res) => {
 
         const {
             createdBy,
-            department,
+            departments,
             createdDateFrom,
             createdDateTo,
             month
@@ -455,9 +455,9 @@ exports.getJobRequirementDetails = async (req, res) => {
         // DEPARTMENT FILTER
         // =====================================================
 
-        if (department) {
+        if (departments) {
             whereClause.department = {
-                [Op.in]: department.split(",").map(v => v.trim())
+                [Op.in]: departments.split(",").map(v => v.trim())
             };
         }
         whereClause.jobReqStatus = {
@@ -549,7 +549,7 @@ exports.getPlacedStudentsDetails = async (req, res) => {
             courseNames,
             placedBy,
             packageRange,
-            placementStatusFilter = "Placed",
+            placementStatusFilter = "All",
             placementDateFrom,
             placementDateTo,
             month
@@ -731,7 +731,12 @@ exports.getPlacedStudentsDetails = async (req, res) => {
                 "placedBy",
                 "companyName",
                 "package",
-                "placementDate"
+                "placementDate",
+                "courseName",
+                "placementStatus",
+                "joiningStatus",
+                "verificationRemarks",
+                "placementRemarks"
             ],
 
             order: [
@@ -762,229 +767,7 @@ exports.getPlacedStudentsDetails = async (req, res) => {
         });
     }
 };
-exports.getPlacedStudentsDetails = async (req, res) => {
-    try {
 
-        const {
-            departments,
-            branches,
-            courseTypes,
-            courseNames,
-            placedBy,
-            packageRange,
-            placementStatusFilter = "Placed",
-            placementDateFrom,
-            placementDateTo,
-            month
-        } = req.query;
-
-        const whereClause = {
-            readyForPlacement: "Yes"
-        };
-
-        // =====================================================
-        // PLACEMENT STATUS
-        // =====================================================
-
-        if (placementStatusFilter === "All") {
-
-            whereClause.placementStatus = {
-                [Op.in]: [
-                    "Placed",
-                    "Placed but not accepted the Offer"
-                ]
-            };
-
-        } else {
-
-            whereClause.placementStatus =
-                placementStatusFilter;
-        }
-
-        // =====================================================
-        // DEPARTMENT FILTER
-        // =====================================================
-
-        if (departments) {
-
-            whereClause.Department = {
-                [Op.in]: departments
-                    .split(",")
-                    .map(v => v.trim())
-            };
-        }
-
-        // =====================================================
-        // BRANCH FILTER
-        // =====================================================
-
-        if (branches) {
-
-            whereClause.branch = {
-                [Op.in]: branches
-                    .split(",")
-                    .map(v => v.trim())
-            };
-        }
-
-        // =====================================================
-        // COURSE TYPE FILTER
-        // =====================================================
-
-        if (courseTypes) {
-
-            whereClause.courseType = {
-                [Op.in]: courseTypes
-                    .split(",")
-                    .map(v => v.trim())
-            };
-        }
-
-        // =====================================================
-        // COURSE NAME FILTER
-        // =====================================================
-
-        if (courseNames) {
-
-            whereClause.courseName = {
-                [Op.in]: courseNames
-                    .split(",")
-                    .map(v => v.trim())
-            };
-        }
-
-        // =====================================================
-        // PLACED BY FILTER
-        // =====================================================
-
-        if (placedBy) {
-
-            whereClause.placedBy = {
-                [Op.in]: placedBy
-                    .split(",")
-                    .map(v => v.trim())
-            };
-        }
-
-        // =====================================================
-        // PACKAGE FILTER
-        // =====================================================
-
-        if (packageRange) {
-
-            switch (packageRange) {
-
-                case "<2":
-                    whereClause.package = {
-                        [Op.lt]: 200000
-                    };
-                    break;
-
-                case "2-4":
-                    whereClause.package = {
-                        [Op.between]: [200000, 400000]
-                    };
-                    break;
-
-                case "4-6":
-                    whereClause.package = {
-                        [Op.between]: [400000, 600000]
-                    };
-                    break;
-
-                case ">6":
-                    whereClause.package = {
-                        [Op.gt]: 600000
-                    };
-                    break;
-            }
-        }
-
-        // =====================================================
-        // DATE FILTER
-        // =====================================================
-
-        if (placementDateFrom && placementDateTo) {
-
-            whereClause.placementDate = {
-                [Op.between]: [
-                    placementDateFrom,
-                    placementDateTo
-                ]
-            };
-        }
-
-        // =====================================================
-        // MONTH FILTER
-        // =====================================================
-
-        if (month) {
-
-            whereClause[Op.and] =
-                whereClause[Op.and] || [];
-
-            whereClause[Op.and].push(
-                Sequelize.where(
-                    Sequelize.fn(
-                        "TO_CHAR",
-                        Sequelize.fn(
-                            "DATE_TRUNC",
-                            "month",
-                            Sequelize.col("placementDate")
-                        ),
-                        "Mon YYYY"
-                    ),
-                    month
-                )
-            );
-        }
-
-        // =====================================================
-        // FETCH DATA
-        // =====================================================
-
-        const data = await StudentCourse.findAll({
-
-            where: whereClause,
-
-            attributes: [
-                "studentName",
-                "branch",
-                "Department",
-                "placedBy",
-                "companyName",
-                "package",
-                "placementDate"
-            ],
-
-            order: [
-                ["placementDate", "DESC"]
-            ],
-
-            raw: true
-        });
-
-        return res.json({
-            success: true,
-            count: data.length,
-            data
-        });
-
-    } catch (error) {
-
-        console.error(
-            "Error in getPlacedStudentsDetails:",
-            error
-        );
-
-        return res.status(500).json({
-            success: false,
-            message:
-                "Failed to fetch placed students details",
-            error: error.message
-        });
-    }
-};
 exports.getPlacedByReport = async (
     req,
     res
@@ -999,7 +782,7 @@ exports.getPlacedByReport = async (
             courseNames,
             placedBy,
             packageRange,
-            placementStatusFilter = "Placed",
+            placementStatusFilter = "All",
             placementDateFrom,
             placementDateTo
         } = req.query;

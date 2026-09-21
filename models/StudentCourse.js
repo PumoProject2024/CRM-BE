@@ -464,6 +464,25 @@ const StudentCourse = sequelize.define('StudentCourse', {
     defaultValue: 0,
     comment: 'Total number of times this student has been mapped to a company'
   },
+  joiningStatus: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+
+  verificationRemarks: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+  },
+
+  verificationUpdatedBy: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+
+  verificationUpdatedAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+  },
 }, {
   tableName: 'student_courses',
   timestamps: true

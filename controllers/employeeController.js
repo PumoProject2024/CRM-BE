@@ -2,9 +2,10 @@ const Employee = require("../models/Employee");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const { Op, Sequelize } = require('sequelize');
-const { sendEmployeeCredentials } = require('../utils/emailService'); // 👈 import
-
-
+const ExcelJS = require('exceljs');
+const { sendEmployeeCredentials } = require('../utils/emailService');
+const StudentCourse = require("../models/StudentCourse");
+const { formatDistanceToNow } = require("date-fns");
 
 // Register Employee (Signup)
 exports.createEmployee = async (req, res) => {
@@ -47,25 +48,47 @@ exports.createEmployee = async (req, res) => {
 
 exports.loginEmployee = async (req, res) => {
   try {
+
     const { email_id, password } = req.body;
-    const employee = await Employee.findOne({ where: { email_id } });
+
+    const employee = await Employee.findOne({
+      where: { email_id }
+    });
 
     if (!employee) {
-      return res.status(404).json({ message: "User not found" });
+      return res.status(404).json({
+        message: "User not found"
+      });
     }
 
-    const isPasswordValid = await bcrypt.compare(password, employee.password);
+    // ✅ Check employee active/deactive status
+    if (!employee.has_access) {
+      return res.status(403).json({
+        message: "Your account is deactivated. Please contact admin."
+      });
+    }
+
+    const isPasswordValid = await bcrypt.compare(
+      password,
+      employee.password
+    );
+
     if (!isPasswordValid) {
-      return res.status(401).json({ message: "Invalid credentials" });
+      return res.status(401).json({
+        message: "Invalid credentials"
+      });
     }
 
     await Employee.update(
-      { lastLogin: new Date() },
-      { where: { emp_id: employee.emp_id } }
+      {
+        lastLogin: new Date()
+      },
+      {
+        where: {
+          emp_id: employee.emp_id
+        }
+      }
     );
-
-    const check = await Employee.findOne({ where: { emp_id: employee.emp_id } });
-    console.log("DB lastLogin:", check.lastLogin);
 
     const token = jwt.sign(
       {
@@ -78,12 +101,19 @@ exports.loginEmployee = async (req, res) => {
         Department: employee.Department
       },
       process.env.JWT_SECRET,
-      { expiresIn: "8h" }
+      {
+        expiresIn: "8h"
+      }
     );
 
     res.json({ token });
+
   } catch (error) {
-    res.status(500).json({ error: error.message });
+
+    res.status(500).json({
+      error: error.message
+    });
+
   }
 };
 
@@ -168,173 +198,773 @@ exports.getEmployees = async (req, res) => {
 // Get All Employee Details (No filters)
 // controllers/employeeController.js
 exports.getAllEmployeeDetails = async (req, res) => {
+
   try {
-    const { Op, Sequelize } = require('sequelize');
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
+
+    const { Op, Sequelize } = require("sequelize");
+
+    const {
+      search,
+      branch,
+      department,
+      role,
+      loginFrom,
+      loginTo,
+      lastLoginFilter,
+      has_access,
+      page = 1,
+      limit = 20
+    } = req.query;
+
     const offset = (page - 1) * limit;
 
-    const searchQuery = req.query.search ? req.query.search.trim() : '';
-    const branchSearch = req.query.branch ? req.query.branch.trim() : '';
+    const andConditions = [];
 
-    const { role, branch: userBranches } = req.user;
+    // =====================================================
+    // SEARCH
+    // =====================================================
 
-    console.log('🔍 Search params:', { searchQuery, branchSearch });
-    console.log('👤 User details:', { role, userBranches });
+    if (search && search.trim()) {
 
-    const attributes = Object.keys(Employee.rawAttributes);
-    const whereCondition = {};
+      const searchValue = search.trim();
 
-    // Branch-head role restriction
-    if (role === 'Branch-head') {
-      const branchConditions = userBranches.map(branch =>
-        Sequelize.literal(`"branch"::jsonb ? '${branch}'`)
-      );
+      andConditions.push({
 
-      if (branchConditions.length === 1) {
-        whereCondition[Op.and] = branchConditions[0];
-      } else if (branchConditions.length > 1) {
-        whereCondition[Op.or] = branchConditions;
-      }
-
-      console.log('🏢 Branch-head restriction applied for branches:', userBranches);
-    }
-
-    // Search functionality for name, email, and role
-    if (searchQuery) {
-      const validRoles = ["BDE", "Trainer", "Placement officer", "Branch-head", "CEO", "Super-Admin"];
-
-      const searchConditions = [];
-
-      // Name search
-      searchConditions.push({ emp_name: { [Op.iLike]: `%${searchQuery}%` } });
-
-      // Email search  
-      searchConditions.push({ email_id: { [Op.iLike]: `%${searchQuery}%` } });
-
-      // Role search - try multiple approaches
-      const matchingRoles = validRoles.filter(r =>
-        r.toLowerCase() === searchQuery.toLowerCase() ||
-        r.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        searchQuery.toLowerCase().includes(r.toLowerCase())
-      );
-
-      if (matchingRoles.length > 0) {
-        // Add each matching role as a separate condition
-        matchingRoles.forEach(matchingRole => {
-          searchConditions.push({ role: matchingRole });
-        });
-        console.log(`✅ Role search matches found: "${searchQuery}" -> [${matchingRoles.join(', ')}]`);
-      } else {
-        console.log(`❌ No role match for: "${searchQuery}". Available roles:`, validRoles);
-      }
-
-      console.log('🔎 All search conditions:', searchConditions);
-
-      // Apply search conditions properly
-      if (searchConditions.length > 0) {
-        if (Object.keys(whereCondition).length > 0) {
-          // If there are existing conditions (like branch restrictions)
-          const existingConditions = whereCondition[Op.and] || whereCondition[Op.or] || whereCondition;
-          whereCondition[Op.and] = [
-            ...(Array.isArray(existingConditions) ? existingConditions : [existingConditions]),
-            { [Op.or]: searchConditions }
-          ];
-          // Clean up old keys
-          if (whereCondition[Op.or] && whereCondition[Op.and]) delete whereCondition[Op.or];
-        } else {
-          // No existing conditions, just apply search
-          whereCondition[Op.or] = searchConditions;
+        emp_name: {
+          [Op.iLike]: `%${searchValue}%`
         }
-      }
-    }
 
-    // Branch-specific search
-    if (branchSearch) {
-      const branchSearchCondition = Sequelize.literal(`"branch"::jsonb ? '${branchSearch}'`);
-
-      if (role === 'Branch-head' && !userBranches.includes(branchSearch)) {
-        return res.status(403).json({
-          message: `Access denied. You don't have permission to view employees from branch: ${branchSearch}`
-        });
-      }
-
-      if (whereCondition[Op.and]) {
-        whereCondition[Op.and] = Array.isArray(whereCondition[Op.and])
-          ? [...whereCondition[Op.and], branchSearchCondition]
-          : [whereCondition[Op.and], branchSearchCondition];
-      } else if (whereCondition[Op.or]) {
-        const existingOr = whereCondition[Op.or];
-        delete whereCondition[Op.or];
-        whereCondition[Op.and] = [
-          { [Op.or]: existingOr },
-          branchSearchCondition
-        ];
-      } else {
-        whereCondition[Op.and] = branchSearchCondition;
-      }
-    }
-
-    const orderBy = [['emp_name', 'ASC']];
-
-    console.log('🎯 Final where condition:', JSON.stringify(whereCondition, null, 2));
-
-    // First, let's check what employees exist in the database for debugging
-    if (searchQuery.toLowerCase() === 'trainer') {
-      console.log('🐛 DEBUG: Checking for Trainer role employees...');
-      const debugTrainers = await Employee.findAll({
-        attributes: ['emp_name', 'role', 'email_id'],
-        where: { role: 'Trainer' },
-        limit: 5
       });
-      console.log('🐛 Found Trainer employees:', debugTrainers.map(emp => emp.get({ plain: true })));
+
+    }
+    // =====================================================
+    // BRANCH FILTER (MULTI SELECT)
+    // =====================================================
+
+    if (branch) {
+
+      const branches = branch
+        .split(",")
+        .map(b => b.trim());
+
+      const branchConditions = branches.map(branchName =>
+        Sequelize.literal(`"branch"::jsonb ? '${branchName}'`)
+      );
+
+      andConditions.push({
+
+        [Op.or]: branchConditions
+
+      });
+
     }
 
-    const { count, rows: employees } = await Employee.findAndCountAll({
-      attributes,
-      where: whereCondition,
-      limit,
+    // =====================================================
+    // DEPARTMENT FILTER (MULTI SELECT)
+    // =====================================================
+
+    if (department) {
+
+      const departments = department
+        .split(",")
+        .map(d => d.trim());
+
+      const departmentConditions = departments.map(dep =>
+        Sequelize.literal(`"Department"::jsonb ? '${dep}'`)
+      );
+
+      andConditions.push({
+
+        [Op.or]: departmentConditions
+
+      });
+
+    }
+
+    // =====================================================
+    // ROLE FILTER (MULTI SELECT)
+    // =====================================================
+
+    if (role) {
+
+      const roles = role
+        .split(",")
+        .map(r => r.trim());
+
+      andConditions.push({
+
+        role: {
+          [Op.in]: roles
+        }
+
+      });
+
+    }
+    // =====================================================
+    // LOGIN DATE FILTER
+    // =====================================================
+
+    if (lastLoginFilter) {
+
+      if (lastLoginFilter === "never") {
+
+        andConditions.push({
+          lastLogin: null
+        });
+
+      } else {
+
+        const days =
+          parseInt(lastLoginFilter);
+
+        const fromDate =
+          new Date();
+
+        fromDate.setDate(
+          fromDate.getDate() - days
+        );
+
+        andConditions.push({
+          lastLogin: {
+            [Op.gte]: fromDate
+          }
+        });
+
+      }
+
+    }
+    else if (loginFrom || loginTo) {
+
+      const loginCondition = {};
+
+      if (loginFrom) {
+
+        loginCondition[Op.gte] =
+          new Date(loginFrom);
+
+      }
+
+      if (loginTo) {
+
+        const endDate =
+          new Date(loginTo);
+
+        endDate.setHours(
+          23, 59, 59, 999
+        );
+
+        loginCondition[Op.lte] =
+          endDate;
+
+      }
+
+      andConditions.push({
+
+        lastLogin:
+          loginCondition
+
+      });
+
+    }
+
+    // =====================================================
+    // ACCESS FILTER
+    // =====================================================
+
+    if (
+      has_access !== undefined &&
+      has_access !== ""
+    ) {
+
+      andConditions.push({
+
+        has_access:
+          has_access === "true"
+
+      });
+
+    }
+
+    // =====================================================
+    // BRANCH HEAD RESTRICTION
+    // =====================================================
+
+    if (req.user.role === "Branch-head") {
+
+      let userBranches = [];
+
+      if (Array.isArray(req.user.branch)) {
+
+        userBranches = req.user.branch;
+
+      }
+
+      else if (typeof req.user.branch === "string") {
+
+        try {
+
+          userBranches = JSON.parse(req.user.branch);
+
+        }
+
+        catch {
+
+          userBranches = [req.user.branch];
+
+        }
+
+      }
+
+      const userBranchConditions = userBranches.map(branchName =>
+        Sequelize.literal(`"branch"::jsonb ? '${branchName}'`)
+      );
+
+      andConditions.push({
+
+        [Op.or]: userBranchConditions
+
+      });
+
+    }
+
+    // =====================================================
+    // FINAL QUERY
+    // =====================================================
+
+    const { count, rows } = await Employee.findAndCountAll({
+
+      where: {
+        [Op.and]: andConditions
+      },
+
+      limit: parseInt(limit),
+
       offset,
-      order: orderBy
+
+      order: [["emp_name", "ASC"]]
+
+    });
+    res.status(200).json({
+
+      success: true,
+
+      data: rows,
+
+      pagination: {
+
+        currentPage: parseInt(page),
+
+        totalPages: Math.ceil(count / limit),
+
+        totalRecords: count
+
+      }
+
     });
 
-    console.log(`📊 Query result: Found ${count} employees, returning ${employees.length} employees`);
+  }
 
-    if (!employees || employees.length === 0) {
+  catch (error) {
+
+    console.error("❌ Error fetching employees:", error);
+
+    res.status(500).json({
+      message: "Failed to fetch employees"
+    });
+
+  }
+
+};
+
+exports.toggleEmployeeAccess = async (req, res) => {
+
+  try {
+
+    const { emp_id } =
+      req.params;
+
+    const { has_access } =
+      req.body;
+
+    const employee =
+      await Employee.findByPk(
+        emp_id
+      );
+
+    if (!employee) {
+
       return res.status(404).json({
-        message: "No employees found.",
-        debugInfo: {
-          searchQuery,
-          whereCondition: JSON.stringify(whereCondition),
-          totalEmployeesInDB: await Employee.count()
-        }
+        success: false,
+        message: "Employee not found"
       });
+
     }
 
-    const cleanEmployees = employees.map(emp => emp.get({ plain: true }));
+    await employee.update({
+      has_access
+    });
 
     res.status(200).json({
-      total: count,
-      page,
-      totalPages: Math.ceil(count / limit),
-      perPage: limit,
-      data: cleanEmployees,
-      userContext: {
-        role,
-        accessibleBranches: role === 'Branch-head' ? userBranches : 'All branches'
-      },
-      searchInfo: {
-        searchQuery,
-        branchSearch,
-        searchFields: ['emp_name', 'email_id', 'role'],
-        availableRoles: ["BDE", "Trainer", "Placement officer", "Branch-head", "CEO", "Super-Admin"],
-        note: 'Search works across name, email, and role fields'
-      }
+      success: true,
+      message: has_access
+        ? "Employee activated successfully"
+        : "Employee deactivated successfully"
     });
+
   } catch (error) {
-    console.error("❌ Error in getAllEmployeeDetails:", error);
-    res.status(500).json({ error: "Failed to fetch employee details." });
+
+    console.error(
+      "Toggle Access Error:",
+      error
+    );
+
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message
+    });
+
   }
+
+};
+
+exports.downloadEmployeeExcel = async (req, res) => {
+
+  try {
+
+    const ExcelJS = require("exceljs");
+
+    const { Op, Sequelize } = require("sequelize");
+
+    const { formatDistanceToNow } =
+      require("date-fns");
+
+    const {
+      search,
+      branch,
+      department,
+      role,
+      loginFrom,
+      loginTo,
+      lastLoginFilter,
+      has_access
+    } = req.query;
+
+    const andConditions = [];
+
+    // =====================================================
+    // SEARCH
+    // =====================================================
+
+    if (search?.trim()) {
+
+      andConditions.push({
+
+        emp_name: {
+          [Op.iLike]:
+            `%${search.trim()}%`
+        }
+
+      });
+
+    }
+
+    // =====================================================
+    // BRANCH
+    // =====================================================
+
+    if (branch) {
+
+      const branches =
+        branch
+          .split(",")
+          .map(b => b.trim());
+
+      const branchConditions =
+        branches.map(branchName =>
+
+          Sequelize.literal(
+            `"branch"::jsonb ? '${branchName}'`
+          )
+
+        );
+
+      andConditions.push({
+
+        [Op.or]:
+          branchConditions
+
+      });
+
+    }
+
+    // =====================================================
+    // DEPARTMENT
+    // =====================================================
+
+    if (department) {
+
+      const departments =
+        department
+          .split(",")
+          .map(d => d.trim());
+
+      const departmentConditions =
+        departments.map(dep =>
+
+          Sequelize.literal(
+            `"Department"::jsonb ? '${dep}'`
+          )
+
+        );
+
+      andConditions.push({
+
+        [Op.or]:
+          departmentConditions
+
+      });
+
+    }
+
+    // =====================================================
+    // ROLE
+    // =====================================================
+
+    if (role) {
+
+      const roles =
+        role
+          .split(",")
+          .map(r => r.trim());
+
+      andConditions.push({
+
+        role: {
+          [Op.in]: roles
+        }
+
+      });
+
+    }
+
+    // =====================================================
+    // LAST LOGIN FILTER
+    // =====================================================
+
+    if (lastLoginFilter) {
+
+      if (
+        lastLoginFilter === "never"
+      ) {
+
+        andConditions.push({
+
+          lastLogin: null
+
+        });
+
+      }
+
+      else {
+
+        const days =
+          parseInt(
+            lastLoginFilter
+          );
+
+        const fromDate =
+          new Date();
+
+        fromDate.setDate(
+          fromDate.getDate() - days
+        );
+
+        andConditions.push({
+
+          lastLogin: {
+            [Op.gte]: fromDate
+          }
+
+        });
+
+      }
+
+    }
+
+    else if (
+      loginFrom ||
+      loginTo
+    ) {
+
+      const loginCondition = {};
+
+      if (loginFrom) {
+
+        loginCondition[Op.gte] =
+          new Date(loginFrom);
+
+      }
+
+      if (loginTo) {
+
+        const endDate =
+          new Date(loginTo);
+
+        endDate.setHours(
+          23, 59, 59, 999
+        );
+
+        loginCondition[Op.lte] =
+          endDate;
+
+      }
+
+      andConditions.push({
+
+        lastLogin:
+          loginCondition
+
+      });
+
+    }
+
+    // =====================================================
+    // ACCESS FILTER
+    // =====================================================
+
+    if (
+      has_access !== undefined &&
+      has_access !== ""
+    ) {
+
+      andConditions.push({
+
+        has_access:
+          has_access === "true"
+
+      });
+
+    }
+
+    // =====================================================
+    // FETCH EMPLOYEES
+    // =====================================================
+
+    const employees =
+      await Employee.findAll({
+
+        where: {
+          [Op.and]:
+            andConditions
+        },
+
+        order: [
+          ["emp_name", "ASC"]
+        ]
+
+      });
+
+    // =====================================================
+    // EXCEL
+    // =====================================================
+
+    const workbook =
+      new ExcelJS.Workbook();
+
+    const worksheet =
+      workbook.addWorksheet(
+        "Employees"
+      );
+
+    worksheet.columns = [
+
+      {
+        header: "Employee ID",
+        key: "emp_id",
+        width: 15
+      },
+
+      {
+        header: "Employee Name",
+        key: "emp_name",
+        width: 30
+      },
+
+      {
+        header: "Email",
+        key: "email",
+        width: 35
+      },
+
+      {
+        header: "Contact Number",
+        key: "contact_num",
+        width: 20
+      },
+
+      {
+        header: "Role",
+        key: "role",
+        width: 20
+      },
+
+      {
+        header: "Department",
+        key: "department",
+        width: 25
+      },
+
+      {
+        header: "Branch",
+        key: "branch",
+        width: 25
+      },
+
+      {
+        header: "Student Count",
+        key: "studentCount",
+        width: 18
+      },
+
+      {
+        header: "Status",
+        key: "has_access",
+        width: 15
+      },
+
+      {
+        header: "Last Login",
+        key: "lastLogin",
+        width: 25
+      }
+
+    ];
+
+    for (const emp of employees) {
+
+      const employeeId =
+        String(emp.emp_id);
+
+      const employeeName =
+        emp.emp_name;
+
+      const studentCount =
+        await StudentCourse.count({
+
+          where: {
+
+            [Op.or]: [
+
+              { staffId1: employeeId },
+              { staffId2: employeeId },
+              { staffId3: employeeId },
+
+              { staffName1: employeeName },
+              { staffName2: employeeName },
+              { staffName3: employeeName },
+
+              { mentorid: employeeId },
+              { mentor: employeeName }
+
+            ]
+
+          }
+
+        });
+
+      worksheet.addRow({
+
+        emp_id:
+          emp.emp_id,
+
+        emp_name:
+          emp.emp_name,
+
+        email:
+          emp.email_id,
+
+        contact_num:
+          emp.contact_num,
+
+        role:
+          emp.role,
+
+        department:
+          Array.isArray(
+            emp.Department
+          )
+            ? emp.Department.join(", ")
+            : emp.Department,
+
+        branch:
+          Array.isArray(
+            emp.branch
+          )
+            ? emp.branch.join(", ")
+            : emp.branch,
+
+        studentCount,
+
+        has_access:
+          emp.has_access
+            ? "Active"
+            : "Inactive",
+
+        lastLogin:
+          emp.lastLogin
+            ? formatDistanceToNow(
+              new Date(
+                emp.lastLogin
+              ),
+              {
+                addSuffix: true
+              }
+            )
+            : "Never Logged In"
+
+      });
+
+    }
+
+    worksheet.getRow(1).font = {
+
+      bold: true
+
+    };
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+
+    res.setHeader(
+      "Content-Disposition",
+      "attachment; filename=Employee_Report.xlsx"
+    );
+
+    await workbook.xlsx.write(res);
+
+    res.end();
+
+  }
+
+  catch (error) {
+
+    console.error(
+      "Excel Download Error:",
+      error
+    );
+
+    res.status(500).json({
+
+      message:
+        "Failed to download excel"
+
+    });
+
+  }
+
 };
 
 exports.updateEmployeeById = async (req, res) => {
@@ -363,27 +993,97 @@ exports.updateEmployeeById = async (req, res) => {
 };
 
 exports.deleteEmployeeById = async (req, res) => {
+
   try {
+
     const { emp_id } = req.params;
 
-    // Find employee by primary key
-    const employee = await Employee.findByPk(emp_id);
+    const employee =
+      await Employee.findByPk(emp_id);
 
     if (!employee) {
-      return res.status(404).json({ message: "Employee not found." });
+
+      return res.status(404).json({
+        message: "Employee not found."
+      });
+
     }
 
-    // Delete the employee
+    const { Op } = require("sequelize");
+
+    const employeeId =
+      String(employee.emp_id);
+
+    const employeeName =
+      employee.emp_name;
+
+    const mappedStudents =
+      await StudentCourse.findAll({
+
+        where: {
+
+          [Op.or]: [
+
+            { staffId1: employeeId },
+            { staffId2: employeeId },
+            { staffId3: employeeId },
+
+            { staffName1: employeeName },
+            { staffName2: employeeName },
+            { staffName3: employeeName },
+
+            { mentorid: employeeId },
+            { mentor: employeeName }
+
+          ]
+
+        },
+
+        attributes: [
+          "studentId",
+          "studentName"
+        ]
+
+      });
+
+    if (mappedStudents.length > 0) {
+
+      return res.status(400).json({
+
+        message:
+          `Cannot delete employee. Employee is assigned to ${mappedStudents.length} student(s). Please replace the staff/mentor before deleting.`,
+
+        students:
+          mappedStudents
+
+      });
+
+    }
+
     await employee.destroy();
 
-    res.status(200).json({ message: "Employee deleted successfully." });
-  } catch (error) {
-    console.error("❌ Error in deleteEmployeeById:", error);
-    res.status(500).json({ error: "Failed to delete employee." });
+    res.status(200).json({
+      message:
+        "Employee deleted successfully."
+    });
+
   }
+
+  catch (error) {
+
+    console.error(
+      "❌ Error in deleteEmployeeById:",
+      error
+    );
+
+    res.status(500).json({
+      error:
+        "Failed to delete employee."
+    });
+
+  }
+
 };
-
-
 
 exports.getBDEEmployees = async (req, res) => {
   try {
@@ -489,8 +1189,6 @@ exports.getEmployeeNames = async (req, res) => {
   }
 };
 
-// In your routes file
-
 // In your controller file
 exports.updateEmployeeProfile = async (req, res) => {
   try {
@@ -560,4 +1258,237 @@ exports.changePassword = async (req, res) => {
     console.error("Error changing password:", error);
     res.status(500).json({ error: error.message });
   }
+};
+
+exports.replaceEmployeeMapping = async (
+  req,
+  res
+) => {
+
+  try {
+
+    const {
+      oldEmpId,
+      newStaffEmpId,
+      newMentorEmpId
+    } = req.body;
+
+    // =========================================
+    // VALIDATION
+    // =========================================
+
+    if (
+      !oldEmpId ||
+      !newStaffEmpId ||
+      !newMentorEmpId
+    ) {
+
+      return res.status(400).json({
+
+        message:
+          "Old employee, new staff employee and new mentor employee are required."
+
+      });
+
+    }
+
+    // =========================================
+    // FIND EMPLOYEES
+    // =========================================
+
+    const oldEmployee =
+      await Employee.findByPk(oldEmpId);
+
+    const newStaffEmployee =
+      await Employee.findByPk(newStaffEmpId);
+
+    const newMentorEmployee =
+      await Employee.findByPk(newMentorEmpId);
+
+    if (!oldEmployee) {
+
+      return res.status(404).json({
+
+        message:
+          "Old employee not found."
+
+      });
+
+    }
+
+    if (!newStaffEmployee) {
+
+      return res.status(404).json({
+
+        message:
+          "New staff employee not found."
+
+      });
+
+    }
+
+    if (!newMentorEmployee) {
+
+      return res.status(404).json({
+
+        message:
+          "New mentor employee not found."
+
+      });
+
+    }
+
+    // =========================================
+    // PREPARE VALUES
+    // =========================================
+
+    const oldId =
+      String(oldEmployee.emp_id);
+
+    const oldName =
+      oldEmployee.emp_name;
+
+    // =========================================
+    // FIND ALL MAPPED STUDENTS
+    // =========================================
+
+    const { Op } =
+      require("sequelize");
+
+    const students =
+      await StudentCourse.findAll({
+
+        where: {
+
+          [Op.or]: [
+
+            { staffId1: oldId },
+            { staffId2: oldId },
+            { staffId3: oldId },
+
+            { staffName1: oldName },
+            { staffName2: oldName },
+            { staffName3: oldName },
+
+            { mentorid: oldId },
+            { mentor: oldName }
+
+          ]
+
+        }
+
+      });
+
+    // =========================================
+    // UPDATE STUDENTS
+    // =========================================
+
+    for (const student of students) {
+
+      // =====================================
+      // STAFF 1
+      // =====================================
+
+      if (
+        student.staffId1 === oldId ||
+        student.staffName1 === oldName
+      ) {
+
+        student.staffId1 =
+          String(newStaffEmployee.emp_id);
+
+        student.staffName1 =
+          newStaffEmployee.emp_name;
+
+      }
+
+      // =====================================
+      // STAFF 2
+      // =====================================
+
+      if (
+        student.staffId2 === oldId ||
+        student.staffName2 === oldName
+      ) {
+
+        student.staffId2 =
+          String(newStaffEmployee.emp_id);
+
+        student.staffName2 =
+          newStaffEmployee.emp_name;
+
+      }
+
+      // =====================================
+      // STAFF 3
+      // =====================================
+
+      if (
+        student.staffId3 === oldId ||
+        student.staffName3 === oldName
+      ) {
+
+        student.staffId3 =
+          String(newStaffEmployee.emp_id);
+
+        student.staffName3 =
+          newStaffEmployee.emp_name;
+
+      }
+
+      // =====================================
+      // MENTOR
+      // =====================================
+
+      if (
+        student.mentorid === oldId ||
+        student.mentor === oldName
+      ) {
+
+        student.mentorid =
+          String(newMentorEmployee.emp_id);
+
+        student.mentor =
+          newMentorEmployee.emp_name;
+
+        student.mentorNumber =
+          newMentorEmployee.contact_num;
+
+      }
+
+      await student.save();
+
+    }
+
+    // =========================================
+    // SUCCESS RESPONSE
+    // =========================================
+
+    res.status(200).json({
+
+      success: true,
+
+      message:
+        `${students.length} student mapping(s) replaced successfully.`
+
+    });
+
+  }
+
+  catch (error) {
+
+    console.error(
+      "❌ Error replacing employee mapping:",
+      error
+    );
+
+    res.status(500).json({
+
+      message:
+        "Failed to replace employee mapping."
+
+    });
+
+  }
+
 };

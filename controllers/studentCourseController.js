@@ -2,6 +2,8 @@ const StudentCourse = require('../models/StudentCourse');
 const StudentRegistration = require('../models/studenReg');
 const MappedStudent = require('../models/Mappedstudents');
 const Placement = require('../models/Placement');
+const Employee = require("../models/Employee");
+const { sendPlacementEmail } = require("../utils/placementMailService");
 const ExcelJS = require('exceljs');
 const { sendStudentCredentials } = require("../utils/sendStudentCredentials");
 const { sendStudentLoginReminder } = require("../utils/sendStudentLoginReminder");
@@ -1230,6 +1232,7 @@ const studentCourseController = {
       }
 
       const existingRecord = await StudentCourse.findByPk(id);
+      const isSuperAdmin = req.user?.role === "Super-Admin";
       if (!existingRecord) {
         logger.warn({
           message: "Student course record not found",
@@ -1440,7 +1443,93 @@ const studentCourseController = {
           // placementStatus is already protected above — no change needed here
         }
       }
+      // ========================================
+      // PLACEMENT STATUS LOCK
+      // ========================================
+      const placedStatuses = [
+        "Placed",
+        "Placed but not accepted the Offer"
+      ];
 
+      if (placedStatuses.includes(existingRecord.placementStatus)) {
+
+        const currentStatus = existingRecord.placementStatus;
+        const newStatus = updateData.placementStatus;
+        const placementFields = [
+          "placedBy",
+          "companyName",
+          "jobRole",
+          "package",
+          "placementDate",
+          "joiningDate",
+          "companyLocation",
+        ];
+        const placementFieldChanged = placementFields.some(field => {
+          return (
+            updateData[field] !== undefined &&
+            updateData[field] !== existingRecord[field]
+          );
+        });
+        const isAllowedTransition =
+          currentStatus === "Placed" &&
+          newStatus === "Placed but not accepted the Offer";
+
+        // Placement Status Lock
+        if (
+          updateData.placementStatus &&
+          updateData.placementStatus !== currentStatus &&
+          !isSuperAdmin &&
+          !isAllowedTransition
+        ) {
+          return res.status(403).json({
+            success: false,
+            message:
+              "Sorry! Only Super Admin can update Placement Status."
+          });
+        }
+        // Placement Fields Lock
+        if (placementFieldChanged && !isSuperAdmin) {
+          return res.status(403).json({
+            success: false,
+            message:
+              "Sorry! Only Super Admin can update Placement Details."
+          });
+        }
+      }
+
+      const canUpdateVerification =
+        req.user?.role === "Super-Admin" ||
+        req.user?.emp_id?.toString() === "5278";
+
+      const tryingToUpdateVerification =
+        ("joiningStatus" in updateData &&
+          updateData.joiningStatus !== existingRecord.joiningStatus) ||
+        ("verificationRemarks" in updateData &&
+          updateData.verificationRemarks !== existingRecord.verificationRemarks);
+      console.log({
+        oldJoiningStatus: existingRecord.joiningStatus,
+        newJoiningStatus: updateData.joiningStatus,
+        oldVerificationRemarks: existingRecord.verificationRemarks,
+        newVerificationRemarks: updateData.verificationRemarks,
+        tryingToUpdateVerification
+      });
+      if (tryingToUpdateVerification && !canUpdateVerification) {
+        return res.status(403).json({
+          success: false,
+          message:
+            "Sorry! Only Super Admin or authorized employee (5014) can update Joining Status and Verification Remarks."
+        });
+      }
+      // Verification Tracking
+      // Verification Tracking
+      if (tryingToUpdateVerification) {
+        updateData.verificationUpdatedBy =
+          req.user?.emp_name ||
+          req.user?.emp_id?.toString() ||
+          "Unknown";
+
+        updateData.verificationUpdatedAt = new Date();
+      }
       // === UPDATE OPERATION ===
       await StudentCourse.update(updateData, {
         where: { id },
@@ -1448,6 +1537,9 @@ const studentCourseController = {
       });
 
       const updatedRecord = await StudentCourse.findByPk(id);
+      const placementStatusChanged =
+        existingRecord.placementStatus !==
+        updatedRecord.placementStatus;
 
       logger.info({
         message: "Record updated successfully",
@@ -1503,6 +1595,112 @@ const studentCourseController = {
           }
           : undefined
       });
+      (async () => {
+
+        try {
+
+          const placementStatuses = [
+            "Placed",
+            "Placed but not accepted the Offer"
+          ];
+
+          if (
+            placementStatusChanged &&
+            placementStatuses.includes(
+              updatedRecord.placementStatus
+            )
+          ) {
+
+            const student =
+              await StudentRegistration.findOne({
+                where: {
+                  studentId: updatedRecord.studentId
+                },
+                attributes: [
+                  "email_Id"
+                ]
+              });
+
+            if (!student?.email_Id) {
+              return;
+            }
+
+            let placedByEmployee = null;
+
+            if (updatedRecord.placedBy !== "Self (Student)") {
+              placedByEmployee = await Employee.findOne({
+                where: {
+                  emp_name: updatedRecord.placedBy
+                }
+              });
+            }
+
+            const statusUpdatedEmployee =
+              await Employee.findOne({
+                where: {
+                  emp_name:
+                    updatedRecord.placementStatusChangedBy
+                }
+              });
+            console.log("📧 Sending Placement Mail");
+
+            await sendPlacementEmail(
+              student.email_Id,
+              {
+                studentId:
+                  updatedRecord.studentId,
+
+                studentName:
+                  updatedRecord.studentName,
+
+                placementStatus:
+                  updatedRecord.placementStatus,
+
+                companyName:
+                  updatedRecord.companyName,
+
+                companyLocation:
+                  updatedRecord.companyLocation,
+
+                jobRole:
+                  updatedRecord.jobRole,
+
+                package:
+                  updatedRecord.package,
+
+                placementDate:
+                  updatedRecord.placementDate,
+
+                joiningDate:
+                  updatedRecord.joiningDate,
+
+                placementRemarks:
+                  updatedRecord.placementRemarks,
+
+                placedBy:
+                  placedByEmployee
+                    ? `${placedByEmployee.emp_name} (${placedByEmployee.contact_num})`
+                    : updatedRecord.placedBy,
+
+                statusUpdatedBy:
+                  statusUpdatedEmployee
+                    ? `${statusUpdatedEmployee.emp_name} (${statusUpdatedEmployee.contact_num})`
+                    : updatedRecord.placementStatusChangedBy
+              }
+            );
+            console.log(
+              `✅ Placement mail sent to ${student.email_Id}`
+            );
+          }
+
+        } catch (err) {
+          console.error(
+            "Placement mail background error:",
+            err
+          );
+        }
+
+      })();
 
     } catch (error) {
       logger.error({
@@ -2223,11 +2421,12 @@ const studentCourseController = {
         placementDateTo,
         packageRange,
         searchField,
-        placementStatusFilter = "Placed",  // ✅ NEW - Default to "Placed"
+        placementStatusFilter = "All",  // ✅ NEW - Default to "Placed"
         searchValue,
         photoReview,        // ✅ NEW
         videoReview,        // ✅ NEW
         googleReview,
+        joiningStatus,
         page = 1,
         limit = 10,
         sortBy = "branch",
@@ -2391,6 +2590,37 @@ const studentCourseController = {
           [Op.or]: reviewOrConditions
         });
       }
+	 if (joiningStatus) {
+        const statusArray = joiningStatus.split(",").map(v => v.trim());
+        const hasNotUpdated = statusArray.includes("Not Updated");
+        const realStatuses = statusArray.filter(v => v !== "Not Updated");
+
+        if (hasNotUpdated && realStatuses.length > 0) {
+          // Mix of null + real values
+          whereClause[Op.and] = whereClause[Op.and] || [];
+          whereClause[Op.and].push({
+            [Op.or]: [
+              { joiningStatus: { [Op.in]: realStatuses } },
+              { joiningStatus: { [Op.is]: null } },
+              { joiningStatus: "" }
+            ]
+          });
+        } else if (hasNotUpdated) {
+          // Only null/empty selected
+          whereClause[Op.and] = whereClause[Op.and] || [];
+          whereClause[Op.and].push({
+            [Op.or]: [
+              { joiningStatus: { [Op.is]: null } },
+              { joiningStatus: "" }
+            ]
+          });
+        } else {
+          // Only real statuses selected
+          whereClause.joiningStatus = {
+            [Op.in]: realStatuses
+          };
+        }
+      }
       // Date validation and filtering
       const isValidDate = (date) => !isNaN(new Date(date).getTime());
 
@@ -2485,9 +2715,7 @@ const studentCourseController = {
       }
 
       // Stable sorting
-      studentCourseResults.forEach((item, index) => {
-        item.originalIndex = index;
-      });
+      
 
       const customSort = (a, b) => {
         const branchCompare = (a.branch || "").localeCompare(b.branch || "");
@@ -2499,7 +2727,7 @@ const studentCourseController = {
         if (aCompleted && !bCompleted) return -1;
         if (!aCompleted && bCompleted) return 1;
 
-        return a.originalIndex - b.originalIndex;
+        return (a.id || 0) - (b.id || 0);  // ← stable by id
       };
 
       if (sortBy === "branch") {
@@ -2567,10 +2795,11 @@ const studentCourseController = {
         placementDateFrom,
         placementDateTo,
         packageRange,
-        placementStatusFilter = "Placed",
+        placementStatusFilter = "All",
         photoReview,        // ✅ NEW
         videoReview,        // ✅ NEW
         googleReview,
+        joiningStatus,
         searchField,
         searchValue,
       } = req.query;
@@ -2721,7 +2950,37 @@ const studentCourseController = {
           [Op.or]: reviewOrConditions
         });
       }
+	   if (joiningStatus) {
+        const statusArray = joiningStatus.split(",").map(v => v.trim());
+        const hasNotUpdated = statusArray.includes("Not Updated");
+        const realStatuses = statusArray.filter(v => v !== "Not Updated");
 
+        if (hasNotUpdated && realStatuses.length > 0) {
+          // Mix of null + real values
+          whereClause[Op.and] = whereClause[Op.and] || [];
+          whereClause[Op.and].push({
+            [Op.or]: [
+              { joiningStatus: { [Op.in]: realStatuses } },
+              { joiningStatus: { [Op.is]: null } },
+              { joiningStatus: "" }
+            ]
+          });
+        } else if (hasNotUpdated) {
+          // Only null/empty selected
+          whereClause[Op.and] = whereClause[Op.and] || [];
+          whereClause[Op.and].push({
+            [Op.or]: [
+              { joiningStatus: { [Op.is]: null } },
+              { joiningStatus: "" }
+            ]
+          });
+        } else {
+          // Only real statuses selected
+          whereClause.joiningStatus = {
+            [Op.in]: realStatuses
+          };
+        }
+      }
       // Placement Date Range (Validation included)
       const isValidDate = (d) => !isNaN(new Date(d).getTime());
 
@@ -2878,42 +3137,66 @@ const studentCourseController = {
       // ============================================
       // Final export columns
       // ============================================
-      const combinedColumns = [
-        "studentName",
-        "branch",
-        "Department",
-        "courseName",
-        "placementStatus",
-        "placementDate",
-        "placedBy",
-        "package",
-        "companyName",
-        "companyLocation",
-        "jobRole",
-        "joiningDate",
-        "placementRemarks",
-        "offerLetterPath",
-        "knownSkill",
-        "studentContactNumber",
-        "mentor",
-        "mentorNumber",
-        "photoReview",
-        "photoReviewLink",
-        "photoReviewReason",
-        "videoReview",
-        "videoReviewLink",
-        "videoReviewReason",
-        "googleReview",
-        "googleReviewStars",
-        "googleReviewReason",
-        "placementStatusChangedBy",
-        "placementStatusChangedAt",
-      ];
+         let combinedColumns;
+
+      if (String(emp_id) === "5278") {
+        combinedColumns = [
+          "studentName",
+          "branch",
+          "Department",
+          "courseName",
+          "placementStatus",
+          "placementDate",
+          "placedBy",
+          "package",
+          "companyName",
+          "companyLocation",
+          "jobRole",
+          "joiningDate",
+          "placementRemarks",
+          "joiningStatus",
+          "verificationRemarks"
+        ];
+      } else {
+        combinedColumns = [
+          "studentName",
+          "branch",
+          "Department",
+          "courseName",
+          "placementStatus",
+          "placementDate",
+          "placedBy",
+          "package",
+          "companyName",
+          "companyLocation",
+          "jobRole",
+          "joiningDate",
+          "placementRemarks",
+          "offerLetterPath",
+          "knownSkill",
+          "studentContactNumber",
+          "mentor",
+          "mentorNumber",
+          "photoReview",
+          "photoReviewLink",
+          "photoReviewReason",
+          "videoReview",
+          "videoReviewLink",
+          "videoReviewReason",
+          "googleReview",
+          "googleReviewStars",
+          "googleReviewReason",
+          "placementStatusChangedBy",
+          "placementStatusChangedAt"
+        ];
+      }
 
       // Custom header names
       const customHeaderNames = {
         placementDate: "Placed Date",
-        offerLetterPath: "Offer Letter"
+        offerLetterPath: "Offer Letter",
+	joiningStatus: "Verification Status",
+        verificationRemarks: "Verification Remarks",
       };
 
       const prettifyHeader = key =>
@@ -3312,6 +3595,7 @@ const studentCourseController = {
       });
     }
   },
+
   sendLoginReminder: async (req, res) => {
     try {
 

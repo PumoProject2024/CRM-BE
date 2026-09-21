@@ -13,7 +13,7 @@ const { getAllEmployeeDetails } = require("../controllers/employeeController");
 const { getAllInvoices } = require('../controllers/invoiceController');
 const studentCourseController = require('../controllers/studentCourseController');
 const attendanceController = require('../controllers/attendanceController');
-const { createPlacement, getPlacementByJobReqId, getUpcomingPlacements, getPastPlacements, getUpcomingPlacementsdrive, updatePlacement, getAllPlacements, downloadPlacementsExcel, submitJobFeedback, getJobViews, markJobViewed, checkFeedbackStatus, getClosureSummary, getOldOpenRequirements, sendEscalationMail } = require('../controllers/placementcontrollers');
+const { createPlacement, getPlacementByJobReqId, getUpcomingPlacements, getPastPlacements, getUpcomingPlacementsdrive, updatePlacement, getAllPlacements, downloadPlacementsExcel, submitJobFeedback, getJobViews, markJobViewed, checkFeedbackStatus, getClosureSummary, getOldOpenRequirements, sendEscalationMail, getMyOpenRequirements } = require('../controllers/placementcontrollers');
 const { upload, uploadFile } = require('../controllers/uploadController');
 const bulkUploadController = require('../controllers/bulkUploadController');
 const syllabusController = require('../controllers/syllabusController');
@@ -23,11 +23,83 @@ const technologyController = require('../controllers/technologyController');
 const placementController = require('../controllers/placementController');
 const mappedStudentController = require("../controllers/mappedStudentController");
 const { getPlacedStudentsReport, getAwaitingStudentsReport, getJobRequirementReport, getJobRequirementDetails, downloadBranchPPT, getPlacedStudentsDetails, getPlacedByReport } = require('../controllers/reportController');
-
+const { sendWhatsAppMessage } = require("../utils/sendWhatsApp");
 
 
 const router = express.Router();
+router.get("/test-meta", async (req, res) => {
+  try {
+    const axios = require("axios");
 
+    const response = await axios.get(
+      `https://graph.facebook.com/v23.0/${process.env.WHATSAPP_PHONE_NUMBER_ID}`,
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`,
+        },
+      }
+    );
+
+    res.json(response.data);
+  } catch (error) {
+    res.json(error.response?.data || error.message);
+  }
+});
+router.get("/debug-token", async (req, res) => {
+  try {
+    const axios = require("axios");
+
+    const response = await axios.get(
+      "https://graph.facebook.com/debug_token",
+      {
+        params: {
+          input_token: process.env.WHATSAPP_ACCESS_TOKEN,
+          access_token: process.env.WHATSAPP_ACCESS_TOKEN,
+        },
+      }
+    );
+
+    res.json(response.data);
+  } catch (error) {
+    res.json(error.response?.data || error.message);
+  }
+});
+router.get("/phone-status", async (req, res) => {
+  try {
+    const axios = require("axios");
+
+    const response = await axios.get(
+      `https://graph.facebook.com/v23.0/${process.env.WHATSAPP_PHONE_NUMBER_ID}?fields=verified_name,code_verification_status,display_phone_number,name_status,quality_rating`,
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`,
+        },
+      }
+    );
+
+    res.json(response.data);
+  } catch (error) {
+    res.json(error.response?.data || error.message);
+  }
+});
+router.get("/my-wabas", async (req, res) => {
+  try {
+    const axios = require("axios");
+
+    const response = await axios.get(
+      "https://graph.facebook.com/v23.0/me/whatsapp_business_accounts",
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`
+        }
+      }
+    );
+
+    res.json(response.data);
+  } catch (error) {
+    res.json(error.response?.data || error.message);
+  }
+});
 
 router.post('/upload-syllabus', upload.single('file'), syllabusController.uploadSyllabusExcel);
 router.get('/modules/:courseType/:courseName', syllabusController.getModules);
@@ -63,6 +135,7 @@ router.post('/registrations', authMiddleware, StudentRegistrationController.crea
 router.post('/invoices', authMiddleware, createInvoice);
 router.get('/invoices', getInvoices);
 router.get('/all-invoices', authMiddleware, getAllInvoices);
+router.get('/Student-history/:studentId', mappedStudentController.getStudentHistoryWithoutAssignedAndAcknowledged);
 
 
 // GET route to fetch all student registrations
@@ -73,8 +146,10 @@ router.put('/update/:id', authMiddleware, StudentRegistrationController.updateSt
 
 router.post("/register", employeeController.createEmployee); // Allow first registration without auth
 router.post("/login", employeeController.loginEmployee); // No middleware here
+  router.put("/toggle-access/:emp_id",employeeController.toggleEmployeeAccess);
 router.get("/regdetail", authMiddleware, employeeController.getEmployees);
 router.get("/all-employees", authMiddleware, getAllEmployeeDetails);
+router.get("/employees/download-excel",authMiddleware,employeeController.downloadEmployeeExcel);
 router.put('/regdetail/update', authMiddleware, employeeController.updateEmployeeProfile);
 router.post('/changepassword', authMiddleware, employeeController.changePassword);
 router.put("/employees/:emp_id", employeeController.updateEmployeeById);
@@ -86,6 +161,7 @@ router.get('/student-rec/:id', authMiddleware, studentCourseController.getById);
 router.get('/placed-record', authMiddleware, studentCourseController.placed);
 router.put('/students-record/:id', authMiddleware, studentCourseController.update);
 router.get("/trainers", employeeController.getTrainerEmployees);
+router.put("/replace-employee-mapping",employeeController.replaceEmployeeMapping);
 
 router.get("/placement-officer", employeeController.getPlacementOfficerNames);
 router.get("/employees", employeeController.getEmployeeNames);
@@ -138,6 +214,7 @@ router.get('/resumes/downloadall',authMiddleware, downloadAllResumes);
 router.get('/company/:companyId/download-resumes', downloadMappedStudentsResumes);
 router.get('/resume/download', downloadResumes);
 router.post('/resume/download', downloadResumes);
+router.get("/my-open-requirements",authMiddleware,getMyOpenRequirements);
 
 router.post('/tech', technologyController.createTechnology);
 router.get('/alltech', technologyController.getTechnologies);
@@ -173,7 +250,18 @@ router.get("/reports/placedby/details",authMiddleware,getPlacedByReport);
 router.get("/placements/:jobReqId/closure-summary",authMiddleware,getClosureSummary);
 router.get( "/old-open-requirements",authMiddleware,getOldOpenRequirements);
 router.post( "/send-escalation-mail",authMiddleware,sendEscalationMail);
+router.post("/test-whatsapp", async (req, res) => {
+  try {
+    const result = await sendWhatsAppMessage(
+      "919025680801", // recipient number
+      "Hello from Pumo CRM 🚀"
+    );
 
+    res.json(result);
+  } catch (err) {
+    res.status(500).json(err.message);
+  }
+});
 
 router.post('/student/:studentId/approve-skills',
   studentAuthMiddleware,
@@ -193,5 +281,22 @@ router.post('/students-record/:id/approve-skills',
   },
   StudentRegistrationController.approveSkills
 );
+router.get("/webhook", (req, res) => {
+  const VERIFY_TOKEN = "pumo_whatsapp_verify";
 
+  const mode = req.query["hub.mode"];
+  const token = req.query["hub.verify_token"];
+  const challenge = req.query["hub.challenge"];
+
+  if (mode === "subscribe" && token === VERIFY_TOKEN) {
+    return res.status(200).send(challenge);
+  }
+
+  return res.sendStatus(403);
+});
+
+router.post("/webhook", (req, res) => {
+    console.log("WhatsApp webhook:", JSON.stringify(req.body, null, 2));
+  res.sendStatus(200);
+});
 module.exports = router;

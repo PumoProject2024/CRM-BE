@@ -40,7 +40,7 @@ async function sendPlacementEscalationMail(
     // =========================================
 
     const commonEmails = [
-      "hariharry825@gmail.com"
+      "vidharshanapumohr@gmail.com"
     ];
 
     // =========================================
