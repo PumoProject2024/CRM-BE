@@ -7,6 +7,15 @@ const { sendEmployeeCredentials } = require('../utils/emailService');
 const StudentCourse = require("../models/StudentCourse");
 const { formatDistanceToNow } = require("date-fns");
 
+// MariaDB equivalent of the PostgreSQL jsonb "?" (element exists) test used by the branch/department filters:
+// true when the JSON column (an array of strings, or a single JSON string) contains exactly that string.
+// Exact, case-sensitive match; NULL column -> not a match. The value is escaped by Sequelize, never concatenated.
+const jsonHasElement = (column, value) =>
+  Sequelize.where(
+    Sequelize.fn("JSON_CONTAINS", Sequelize.col(column), Sequelize.fn("JSON_QUOTE", String(value))),
+    1
+  );
+
 // Register Employee (Signup)
 exports.createEmployee = async (req, res) => {
   try {
@@ -146,8 +155,8 @@ exports.getEmployees = async (req, res) => {
         where: {
           role: roleFilter,
           [Op.and]: [
-            Sequelize.literal(`location::text ILIKE '%${cleanLocation}%'`),
-            Sequelize.literal(`branch::text ILIKE '%${cleanBranch}%'`)
+            Sequelize.where(Sequelize.cast(Sequelize.col("location"), "CHAR"), { [Op.like]: `%${cleanLocation}%` }),
+            Sequelize.where(Sequelize.cast(Sequelize.col("branch"), "CHAR"), { [Op.like]: `%${cleanBranch}%` })
           ],
         },
         attributes: [
@@ -231,7 +240,7 @@ exports.getAllEmployeeDetails = async (req, res) => {
       andConditions.push({
 
         emp_name: {
-          [Op.iLike]: `%${searchValue}%`
+          [Op.like]: `%${searchValue}%`
         }
 
       });
@@ -248,7 +257,7 @@ exports.getAllEmployeeDetails = async (req, res) => {
         .map(b => b.trim());
 
       const branchConditions = branches.map(branchName =>
-        Sequelize.literal(`"branch"::jsonb ? '${branchName}'`)
+        jsonHasElement("branch", branchName)
       );
 
       andConditions.push({
@@ -270,7 +279,7 @@ exports.getAllEmployeeDetails = async (req, res) => {
         .map(d => d.trim());
 
       const departmentConditions = departments.map(dep =>
-        Sequelize.literal(`"Department"::jsonb ? '${dep}'`)
+        jsonHasElement("Department", dep)
       );
 
       andConditions.push({
@@ -416,7 +425,7 @@ exports.getAllEmployeeDetails = async (req, res) => {
       }
 
       const userBranchConditions = userBranches.map(branchName =>
-        Sequelize.literal(`"branch"::jsonb ? '${branchName}'`)
+        jsonHasElement("branch", branchName)
       );
 
       andConditions.push({
@@ -561,7 +570,7 @@ exports.downloadEmployeeExcel = async (req, res) => {
       andConditions.push({
 
         emp_name: {
-          [Op.iLike]:
+          [Op.like]:
             `%${search.trim()}%`
         }
 
@@ -583,9 +592,7 @@ exports.downloadEmployeeExcel = async (req, res) => {
       const branchConditions =
         branches.map(branchName =>
 
-          Sequelize.literal(
-            `"branch"::jsonb ? '${branchName}'`
-          )
+          jsonHasElement("branch", branchName)
 
         );
 
@@ -612,9 +619,7 @@ exports.downloadEmployeeExcel = async (req, res) => {
       const departmentConditions =
         departments.map(dep =>
 
-          Sequelize.literal(
-            `"Department"::jsonb ? '${dep}'`
-          )
+          jsonHasElement("Department", dep)
 
         );
 
@@ -1099,7 +1104,7 @@ exports.getBDEEmployees = async (req, res) => {
       where: Sequelize.where(
         Sequelize.cast(Sequelize.col("role"), "TEXT"),
         {
-          [Op.iLike]: "bde"
+          [Op.like]: "bde"
         }
       ),
       // Branch filter also needs cast if it's enum or json
@@ -1108,10 +1113,10 @@ exports.getBDEEmployees = async (req, res) => {
         where: {
           [Op.and]: [
             Sequelize.where(Sequelize.cast(Sequelize.col("role"), "TEXT"), {
-              [Op.iLike]: "bde",
+              [Op.like]: "bde",
             }),
             Sequelize.where(Sequelize.cast(Sequelize.col("branch"), "TEXT"), {
-              [Op.iLike]: `%${cleanBranch}%`,
+              [Op.like]: `%${cleanBranch}%`,
             }),
           ]
         }
@@ -1140,10 +1145,10 @@ exports.getTrainerEmployees = async (req, res) => {
       where: {
         [Op.and]: [
           Sequelize.where(Sequelize.cast(Sequelize.col("role"), "TEXT"), {
-            [Op.iLike]: "trainer"
+            [Op.like]: "trainer"
           }),
           Sequelize.where(Sequelize.cast(Sequelize.col("branch"), "TEXT"), {
-            [Op.iLike]: `%${cleanBranch}%`
+            [Op.like]: `%${cleanBranch}%`
           })
         ]
       },
@@ -1162,7 +1167,7 @@ exports.getPlacementOfficerNames = async (req, res) => {
       where: Sequelize.where(
         Sequelize.cast(Sequelize.col("role"), "TEXT"),
         {
-          [Op.iLike]: "placement officer"
+          [Op.like]: "placement officer"
         }
       ),
       attributes: ["emp_name"]

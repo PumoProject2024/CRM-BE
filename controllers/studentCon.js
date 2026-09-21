@@ -8,6 +8,18 @@ const jwt = require('jsonwebtoken');
 require('dotenv').config();
 const StudentDeviceToken = require("../models/StudentDeviceToken");
 
+// Numeric suffix of a studentId, e.g. "CO-CH-1001" -> 1001, "CO-CH-0007" -> 7. NULL when the id does not end in digits.
+// (The original PostgreSQL expression cast the regex-extracted trailing digits to INTEGER.)
+// MariaDB's REGEXP_SUBSTR returns an empty string, not NULL, when nothing matches, hence the NULLIF.
+const STUDENT_ID_NUMBER_SQL = `CAST(NULLIF(REGEXP_SUBSTR(studentId, '[0-9]+$'), '') AS UNSIGNED)`;
+
+// ORDER BY the numeric suffix, highest first. PostgreSQL sorts NULLs FIRST for DESC while MariaDB sorts them LAST, so ids
+// without a numeric suffix are put first explicitly to keep the existing order.
+const orderByStudentIdNumberDesc = () => [
+  [Sequelize.literal(`(${STUDENT_ID_NUMBER_SQL}) IS NULL`), 'DESC'],
+  [Sequelize.literal(STUDENT_ID_NUMBER_SQL), 'DESC'],
+];
+
 // Now you can use sequelize in your updateStudentRegistration function
 
 // Add this utility function (can be in a separate utils file or at the top of your controller)
@@ -243,9 +255,7 @@ class StudentRegistrationController {
         },
         limit: limitNum,
         offset: (pageNum - 1) * limitNum,
-        order: [
-          [Sequelize.literal(`CAST(SUBSTRING("studentId" FROM '[0-9]+$') AS INTEGER)`), 'DESC']
-        ]
+        order: orderByStudentIdNumberDesc()
       };
 
       // Extract allowed branches from user
@@ -286,10 +296,10 @@ class StudentRegistrationController {
       if (dueToday === "true") {
         const todayDate = new Date().toISOString().split("T")[0];
         options.where[Op.or] = [
-          { pendingFeesDate: { [Op.eq]: Sequelize.literal(`'${todayDate}'::date`) } },
-          { pendingFeesDate2: { [Op.eq]: Sequelize.literal(`'${todayDate}'::date`) } },
-          { pendingFeesDate3: { [Op.eq]: Sequelize.literal(`'${todayDate}'::date`) } },
-          { pendingFeesDate4: { [Op.eq]: Sequelize.literal(`'${todayDate}'::date`) } },
+          { pendingFeesDate: { [Op.eq]: Sequelize.fn('DATE', todayDate) } },
+          { pendingFeesDate2: { [Op.eq]: Sequelize.fn('DATE', todayDate) } },
+          { pendingFeesDate3: { [Op.eq]: Sequelize.fn('DATE', todayDate) } },
+          { pendingFeesDate4: { [Op.eq]: Sequelize.fn('DATE', todayDate) } },
         ];
       }
 
@@ -310,25 +320,25 @@ class StudentRegistrationController {
           {
             [Op.and]: [
               { pendingFees: { [Op.gt]: 0 } },
-              { pendingFeesDate: { [Op.lt]: Sequelize.literal(`'${todayDate}'::date`) } }
+              { pendingFeesDate: { [Op.lt]: Sequelize.fn('DATE', todayDate) } }
             ]
           },
           {
             [Op.and]: [
               { pendingFees2: { [Op.gt]: 0 } },
-              { pendingFeesDate2: { [Op.lt]: Sequelize.literal(`'${todayDate}'::date`) } }
+              { pendingFeesDate2: { [Op.lt]: Sequelize.fn('DATE', todayDate) } }
             ]
           },
           {
             [Op.and]: [
               { pendingFees3: { [Op.gt]: 0 } },
-              { pendingFeesDate3: { [Op.lt]: Sequelize.literal(`'${todayDate}'::date`) } }
+              { pendingFeesDate3: { [Op.lt]: Sequelize.fn('DATE', todayDate) } }
             ]
           },
           {
             [Op.and]: [
               { pendingFees4: { [Op.gt]: 0 } },
-              { pendingFeesDate4: { [Op.lt]: Sequelize.literal(`'${todayDate}'::date`) } }
+              { pendingFeesDate4: { [Op.lt]: Sequelize.fn('DATE', todayDate) } }
             ]
           }
         ];
@@ -339,7 +349,7 @@ class StudentRegistrationController {
         const todayDate = new Date().toISOString().split("T")[0];
         options.where = {
           ...options.where,
-          dateOfAdmission: { [Op.eq]: Sequelize.literal(`'${todayDate}'::date`) }
+          dateOfAdmission: { [Op.eq]: Sequelize.fn('DATE', todayDate) }
         };
       }
 
@@ -351,8 +361,8 @@ class StudentRegistrationController {
           ...options.where,
           dateOfAdmission: {
             [Op.between]: [
-              Sequelize.literal(`'${validFromDate}'::date`),
-              Sequelize.literal(`'${validToDate}'::date`)
+              Sequelize.fn('DATE', validFromDate),
+              Sequelize.fn('DATE', validToDate)
             ]
           }
         };
@@ -386,22 +396,22 @@ class StudentRegistrationController {
           const num = parseInt(search, 10);
           return {
             [Op.or]: [
-              Sequelize.where(Sequelize.fn('extract', Sequelize.literal('year from "pendingFeesDate"')), num),
-              Sequelize.where(Sequelize.fn('extract', Sequelize.literal('month from "pendingFeesDate"')), num),
-              Sequelize.where(Sequelize.fn('extract', Sequelize.literal('day from "pendingFeesDate"')), num)
+              Sequelize.where(Sequelize.fn('YEAR', Sequelize.col('pendingFeesDate')), num),
+              Sequelize.where(Sequelize.fn('MONTH', Sequelize.col('pendingFeesDate')), num),
+              Sequelize.where(Sequelize.fn('DAY', Sequelize.col('pendingFeesDate')), num)
             ]
           };
         }
 
         const fullDateRegex = /^\d{4}-\d{2}-\d{2}$/;
         if (fullDateRegex.test(search)) {
-          return { [Op.eq]: Sequelize.literal(`'${search}'::date`) };
+          return { [Op.eq]: Sequelize.fn('DATE', search) };
         }
 
         if (/^\d{4}-$/.test(search)) {
           const year = parseInt(search.substring(0, 4), 10);
           return Sequelize.where(
-            Sequelize.fn('extract', Sequelize.literal('year from "pendingFeesDate"')),
+            Sequelize.fn('YEAR', Sequelize.col('pendingFeesDate')),
             year
           );
         }
@@ -412,12 +422,12 @@ class StudentRegistrationController {
           const month = parts[1] ? parseInt(parts[1], 10) : null;
 
           let conditions = [
-            Sequelize.where(Sequelize.fn('extract', Sequelize.literal('year from "pendingFeesDate"')), year)
+            Sequelize.where(Sequelize.fn('YEAR', Sequelize.col('pendingFeesDate')), year)
           ];
 
           if (month !== null) {
             conditions.push(
-              Sequelize.where(Sequelize.fn('extract', Sequelize.literal('month from "pendingFeesDate"')), month)
+              Sequelize.where(Sequelize.fn('MONTH', Sequelize.col('pendingFeesDate')), month)
             );
           }
 
@@ -434,21 +444,21 @@ class StudentRegistrationController {
           if (yearStr) {
             const year = parseInt(yearStr, 10);
             conditions.push(
-              Sequelize.where(Sequelize.fn('extract', Sequelize.literal('year from "pendingFeesDate"')), year)
+              Sequelize.where(Sequelize.fn('YEAR', Sequelize.col('pendingFeesDate')), year)
             );
           }
 
           if (monthStr) {
             const month = parseInt(monthStr, 10);
             conditions.push(
-              Sequelize.where(Sequelize.fn('extract', Sequelize.literal('month from "pendingFeesDate"')), month)
+              Sequelize.where(Sequelize.fn('MONTH', Sequelize.col('pendingFeesDate')), month)
             );
           }
 
           if (dayStr) {
             const day = parseInt(dayStr, 10);
             conditions.push(
-              Sequelize.where(Sequelize.fn('extract', Sequelize.literal('day from "pendingFeesDate"')), day)
+              Sequelize.where(Sequelize.fn('DAY', Sequelize.col('pendingFeesDate')), day)
             );
           }
 
@@ -461,7 +471,7 @@ class StudentRegistrationController {
       // Apply search filter if present
       if (search && searchField) {
         if (fieldTypes.stringFields.includes(searchField)) {
-          options.where[searchField] = { [Op.iLike]: `%${search}%` };
+          options.where[searchField] = { [Op.like]: `%${search}%` };
         } else if (fieldTypes.numericFields.includes(searchField)) {
           options.where[searchField] = isNaN(search) ? null : parseInt(search);
         } else if (fieldTypes.decimalFields.includes(searchField)) {
@@ -652,9 +662,7 @@ class StudentRegistrationController {
         where: {
           pendingFees: { [Op.gt]: 0 }
         },
-        order: [
-          [Sequelize.literal(`CAST(SUBSTRING("studentId" FROM '[0-9]+$') AS INTEGER)`), 'DESC']
-        ]
+        order: orderByStudentIdNumberDesc()
       };
 
       // Extract allowed branches from user
@@ -721,10 +729,10 @@ class StudentRegistrationController {
 
         // Create an array to hold due today conditions
         const dueTodayConditions = [
-          { pendingFeesDate: { [Op.eq]: Sequelize.literal(`'${todayDate}'::date`) } },
-          { pendingFeesDate2: { [Op.eq]: Sequelize.literal(`'${todayDate}'::date`) } },
-          { pendingFeesDate3: { [Op.eq]: Sequelize.literal(`'${todayDate}'::date`) } },
-          { pendingFeesDate4: { [Op.eq]: Sequelize.literal(`'${todayDate}'::date`) } },
+          { pendingFeesDate: { [Op.eq]: Sequelize.fn('DATE', todayDate) } },
+          { pendingFeesDate2: { [Op.eq]: Sequelize.fn('DATE', todayDate) } },
+          { pendingFeesDate3: { [Op.eq]: Sequelize.fn('DATE', todayDate) } },
+          { pendingFeesDate4: { [Op.eq]: Sequelize.fn('DATE', todayDate) } },
         ];
 
         // If there are already OR conditions in the where clause, combine them
@@ -745,8 +753,8 @@ class StudentRegistrationController {
         const validToDate = new Date(toDate).toISOString().split("T")[0];
         options.where.dateOfAdmission = {
           [Op.between]: [
-            Sequelize.literal(`'${validFromDate}'::date`),
-            Sequelize.literal(`'${validToDate}'::date`)
+            Sequelize.fn('DATE', validFromDate),
+            Sequelize.fn('DATE', validToDate)
           ]
         };
       }
@@ -763,11 +771,11 @@ class StudentRegistrationController {
             const existingStudentIdFilter = options.where.studentId;
             options.where[Op.and] = [
               { studentId: existingStudentIdFilter },
-              { studentId: { [Op.iLike]: `%${search}%` } }
+              { studentId: { [Op.like]: `%${search}%` } }
             ];
             delete options.where.studentId;
           } else {
-            options.where[searchField] = { [Op.iLike]: `%${search}%` };
+            options.where[searchField] = { [Op.like]: `%${search}%` };
           }
         } else if (numericFields.includes(searchField)) {
           const numValue = parseFloat(search);
@@ -777,7 +785,7 @@ class StudentRegistrationController {
         } else if (dateFields.includes(searchField)) {
           const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
           if (dateRegex.test(search)) {
-            options.where[searchField] = { [Op.eq]: Sequelize.literal(`'${search}'::date`) };
+            options.where[searchField] = { [Op.eq]: Sequelize.fn('DATE', search) };
           }
         }
       }
@@ -832,9 +840,7 @@ class StudentRegistrationController {
         },
         limit: limitNum,
         offset: (pageNum - 1) * limitNum,
-        order: [
-          [Sequelize.literal(`CAST(SUBSTRING("studentId" FROM '[0-9]+$') AS INTEGER)`), 'DESC']
-        ]
+        order: orderByStudentIdNumberDesc()
       };
 
       const { role, emp_name, branch: allowedBranches } = req.user;
@@ -867,7 +873,7 @@ class StudentRegistrationController {
         ];
 
         if (stringFields.includes(searchField)) {
-          options.where[searchField] = { [Op.iLike]: `%${search}%` };
+          options.where[searchField] = { [Op.like]: `%${search}%` };
         }
       }
 
@@ -1797,9 +1803,7 @@ class StudentRegistrationController {
         },
         limit: limitNum,
         offset: (pageNum - 1) * limitNum,
-        order: [
-          [Sequelize.literal(`CAST(SUBSTRING("studentId" FROM '[0-9]+$') AS INTEGER)`), 'DESC']
-        ]
+        order: orderByStudentIdNumberDesc()
       };
 
       // Extract allowed branches from user
@@ -1847,8 +1851,8 @@ class StudentRegistrationController {
           ...options.where,
           dateOfAdmission: {
             [Op.between]: [
-              Sequelize.literal(`'${validFromDate}'::date`),
-              Sequelize.literal(`'${validToDate}'::date`)
+              Sequelize.fn('DATE', validFromDate),
+              Sequelize.fn('DATE', validToDate)
             ]
           }
         };
@@ -1878,7 +1882,7 @@ class StudentRegistrationController {
       // Apply search filter if present (same logic as original)
       if (search && searchField) {
         if (fieldTypes.stringFields.includes(searchField)) {
-          options.where[searchField] = { [Op.iLike]: `%${search}%` };
+          options.where[searchField] = { [Op.like]: `%${search}%` };
         } else if (fieldTypes.numericFields.includes(searchField)) {
           options.where[searchField] = isNaN(search) ? null : parseInt(search);
         } else if (fieldTypes.decimalFields.includes(searchField)) {
@@ -1892,16 +1896,16 @@ class StudentRegistrationController {
               const num = parseInt(search, 10);
               return {
                 [Op.or]: [
-                  Sequelize.where(Sequelize.fn('extract', Sequelize.literal('year from "' + searchField + '"')), num),
-                  Sequelize.where(Sequelize.fn('extract', Sequelize.literal('month from "' + searchField + '"')), num),
-                  Sequelize.where(Sequelize.fn('extract', Sequelize.literal('day from "' + searchField + '"')), num)
+                  Sequelize.where(Sequelize.fn('YEAR', Sequelize.col(searchField)), num),
+                  Sequelize.where(Sequelize.fn('MONTH', Sequelize.col(searchField)), num),
+                  Sequelize.where(Sequelize.fn('DAY', Sequelize.col(searchField)), num)
                 ]
               };
             }
 
             const fullDateRegex = /^\d{4}-\d{2}-\d{2}$/;
             if (fullDateRegex.test(search)) {
-              return { [Op.eq]: Sequelize.literal(`'${search}'::date`) };
+              return { [Op.eq]: Sequelize.fn('DATE', search) };
             }
 
             const partialDateRegex = /^(\d{4})(?:-(\d{1,2}))?(?:-(\d{1,2}))?$/;
@@ -1913,17 +1917,17 @@ class StudentRegistrationController {
 
               if (yearStr) {
                 conditions.push(
-                  Sequelize.where(Sequelize.fn('extract', Sequelize.literal('year from "' + searchField + '"')), parseInt(yearStr, 10))
+                  Sequelize.where(Sequelize.fn('YEAR', Sequelize.col(searchField)), parseInt(yearStr, 10))
                 );
               }
               if (monthStr) {
                 conditions.push(
-                  Sequelize.where(Sequelize.fn('extract', Sequelize.literal('month from "' + searchField + '"')), parseInt(monthStr, 10))
+                  Sequelize.where(Sequelize.fn('MONTH', Sequelize.col(searchField)), parseInt(monthStr, 10))
                 );
               }
               if (dayStr) {
                 conditions.push(
-                  Sequelize.where(Sequelize.fn('extract', Sequelize.literal('day from "' + searchField + '"')), parseInt(dayStr, 10))
+                  Sequelize.where(Sequelize.fn('DAY', Sequelize.col(searchField)), parseInt(dayStr, 10))
                 );
               }
 

@@ -217,7 +217,7 @@ const placementController = {
 
       if (studentName) {
         whereCondition.studentName = {
-          [Op.iLike]: `%${studentName.trim()}%`
+          [Op.like]: `%${studentName.trim()}%`
         };
       }
 

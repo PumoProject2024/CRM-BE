@@ -8,6 +8,7 @@ const ExcelJS = require('exceljs');
 const { sendStudentCredentials } = require("../utils/sendStudentCredentials");
 const { sendStudentLoginReminder } = require("../utils/sendStudentLoginReminder");
 const buildStudentFilters = require("../utils/studentFilters");
+const orderLikePostgres = require("../utils/orderLikePostgres");
 const { Sequelize, Op } = require('sequelize');
 const logger = require("../logger");
 
@@ -183,7 +184,7 @@ const studentCourseController = {
         where: whereClause,
         limit: pageSize,
         offset,
-        order: [[sortField, sortDirection]],
+        order: orderLikePostgres(StudentCourse, sortField, sortDirection),
         logging: false,
       });
 
@@ -227,7 +228,7 @@ const studentCourseController = {
       // ✅ Education search fix
       if (searchField === "educationCourse" && searchValue) {
         registrationWhereClause.educationCourse = {
-          [Op.iLike]: `%${searchValue}%`
+          [Op.like]: `%${searchValue}%`
         };
       }
 
@@ -413,7 +414,7 @@ const studentCourseController = {
       // Education search fix
       if (searchField === "educationCourse" && searchValue) {
         registrationWhereClause.educationCourse = {
-          [Op.iLike]: `%${searchValue}%`
+          [Op.like]: `%${searchValue}%`
         };
       }
 
@@ -774,7 +775,7 @@ const studentCourseController = {
         where: whereClause,
         limit: pageSize,
         offset,
-        order: [[sortField, sortDirection]],
+        order: orderLikePostgres(StudentCourse, sortField, sortDirection),
         logging: false,
       });
 
@@ -812,7 +813,7 @@ const studentCourseController = {
 
       if (searchField === "educationCourse" && searchValue) {
         registrationWhereClause.educationCourse = {
-          [Op.iLike]: `%${searchValue}%`
+          [Op.like]: `%${searchValue}%`
         };
       }
 
@@ -956,7 +957,7 @@ const studentCourseController = {
 
       if (searchField === "educationCourse" && searchValue) {
         registrationWhereClause.educationCourse = {
-          [Op.iLike]: `%${searchValue}%`
+          [Op.like]: `%${searchValue}%`
         };
       }
 
@@ -1116,7 +1117,7 @@ const studentCourseController = {
       // Apply search on specific field
       if (searchField && searchValue) {
         whereClause[searchField] = {
-          [Op.iLike]: `%${searchValue}%`,
+          [Op.like]: `%${searchValue}%`,
         };
       }
 
@@ -1152,7 +1153,7 @@ const studentCourseController = {
         where: whereClause,
         limit: pageSize,
         offset: offset,
-        order: [[sortField, sortDirection]],
+        order: orderLikePostgres(StudentCourse, sortField, sortDirection),
         logging: console.log, // Shows the actual SQL query
       });
 
@@ -1764,7 +1765,7 @@ const studentCourseController = {
       // ✅ Fetch (no branch sort here)
       const studentCourseResults = await StudentCourse.findAll({
         where: whereClause,
-        order: sortBy === "branch" ? [] : [[sortField, sortDirection]]
+        order: sortBy === "branch" ? [] : orderLikePostgres(StudentCourse, sortField, sortDirection)
       });
 
       if (studentCourseResults.length === 0) {
@@ -1838,7 +1839,7 @@ const studentCourseController = {
       // ✅ Search fix (NO override bug)
       if (searchField === "educationCourse" && searchValue) {
         registrationWhereClause.educationCourse = {
-          [Op.iLike]: `%${searchValue}%`
+          [Op.like]: `%${searchValue}%`
         };
       }
 
@@ -2006,9 +2007,9 @@ const studentCourseController = {
       if (companyLocations) {
         const arr = companyLocations.split(",").map(v => v.trim());
         const locConditions = [
-          { desiredlocation: { [Op.iLike]: "%No Constraint%" } },
+          { desiredlocation: { [Op.like]: "%No Constraint%" } },
           ...arr.map(loc => ({
-            desiredlocation: { [Op.iLike]: `%${loc}%` }
+            desiredlocation: { [Op.like]: `%${loc}%` }
           }))
         ];
 
@@ -2074,7 +2075,7 @@ const studentCourseController = {
 
       // Search
       if (searchField && searchValue) {
-        whereClause[searchField] = { [Op.iLike]: `%${searchValue}%` };
+        whereClause[searchField] = { [Op.like]: `%${searchValue}%` };
       }
 
       console.log("Excel whereClause:", whereClause);
@@ -2166,7 +2167,7 @@ const studentCourseController = {
       }
 
       if (searchField === "educationCourse" && searchValue) {
-        registrationWhereClause.educationCourse = { [Op.iLike]: `%${searchValue}%` };
+        registrationWhereClause.educationCourse = { [Op.like]: `%${searchValue}%` };
       }
 
       const registrationData = await StudentRegistration.findAll({
@@ -2520,7 +2521,7 @@ const studentCourseController = {
       }
 
       if (companyName) {
-        whereClause.companyName = { [Op.iLike]: `%${companyName}%` };
+        whereClause.companyName = { [Op.like]: `%${companyName}%` };
       }
 
       if (packageRange) {
@@ -2672,7 +2673,7 @@ const studentCourseController = {
 
       // Search support
       if (searchField && searchValue) {
-        whereClause[searchField] = { [Op.iLike]: `%${searchValue}%` };
+        whereClause[searchField] = { [Op.like]: `%${searchValue}%` };
       }
 
       const pageNumber = parseInt(page);
@@ -2695,7 +2696,7 @@ const studentCourseController = {
 
       const studentCourseResults = await StudentCourse.findAll({
         where: whereClause,
-        order: sortBy === "branch" ? [] : [[sortField, sortDirection]]
+        order: sortBy === "branch" ? [] : orderLikePostgres(StudentCourse, sortField, sortDirection)
       });
 
       if (studentCourseResults.length === 0) {
@@ -2899,7 +2900,7 @@ const studentCourseController = {
 
       // Company Name Search
       if (companyName) {
-        whereClause.companyName = { [Op.iLike]: `%${companyName}%` };
+        whereClause.companyName = { [Op.like]: `%${companyName}%` };
       }
       const reviewOrConditions = [];
 
@@ -3012,7 +3013,7 @@ const studentCourseController = {
 
       // Search filter
       if (searchField && searchValue) {
-        whereClause[searchField] = { [Op.iLike]: `%${searchValue}%` };
+        whereClause[searchField] = { [Op.like]: `%${searchValue}%` };
       }
 
       console.log("Excel whereClause:", JSON.stringify(whereClause, null, 2));
@@ -3351,12 +3352,12 @@ const studentCourseController = {
 
       // Placed By
       if (placedBy) {
-        whereClause.placedBy = { [Op.iLike]: `%${placedBy}%` };
+        whereClause.placedBy = { [Op.like]: `%${placedBy}%` };
       }
 
       // Company
       if (companyName) {
-        whereClause.companyName = { [Op.iLike]: `%${companyName}%` };
+        whereClause.companyName = { [Op.like]: `%${companyName}%` };
       }
 
       // Package filter (same as your existing logic)
@@ -3401,7 +3402,7 @@ const studentCourseController = {
 
       // Search
       if (searchField && searchValue) {
-        whereClause[searchField] = { [Op.iLike]: `%${searchValue}%` };
+        whereClause[searchField] = { [Op.like]: `%${searchValue}%` };
       }
 
       // Sorting (same style)
@@ -3423,7 +3424,7 @@ const studentCourseController = {
       // Fetch all placed students (no pagination)
       const placedResults = await StudentCourse.findAll({
         where: whereClause,
-        order: sortBy === "branch" ? [] : [[sortField, sortDirection]],
+        order: sortBy === "branch" ? [] : orderLikePostgres(StudentCourse, sortField, sortDirection),
       });
 
       // Stable sorting logic (just like your other controllers)
@@ -3535,7 +3536,7 @@ const studentCourseController = {
       // 🔎 Search
       if (searchField && searchValue) {
         whereClause[searchField] = {
-          [Op.iLike]: `%${searchValue}%`
+          [Op.like]: `%${searchValue}%`
         };
       }
 
@@ -3551,7 +3552,7 @@ const studentCourseController = {
       // 🚀 FETCH ALL (NO LIMIT / OFFSET)
       const rows = await StudentCourse.findAll({
         where: whereClause,
-        order: [[sortField, sortDirection]],
+        order: orderLikePostgres(StudentCourse, sortField, sortDirection),
         logging: false
       });
 

@@ -426,7 +426,7 @@ const downloadAllResumes = async (req, res) => {
     // 🔹 Education search
     if (searchField === "educationCourse" && searchValue) {
       registrationWhereClause.educationCourse = {
-        [Op.iLike]: `%${searchValue}%`
+        [Op.like]: `%${searchValue}%`
       };
     }
 
@@ -919,9 +919,9 @@ const downloadResumes = async (req, res) => {
         const locationArray = companyLocations.split(',').map(location => location.trim());
         if (locationArray.length > 0) {
           const locationConditions = [
-            { desiredlocation: { [require('sequelize').Op.iLike]: '%No Constraint%' } },
+            { desiredlocation: { [require('sequelize').Op.like]: '%No Constraint%' } },
             ...locationArray.map(location => ({
-              desiredlocation: { [require('sequelize').Op.iLike]: `%${location}%` }
+              desiredlocation: { [require('sequelize').Op.like]: `%${location}%` }
             }))
           ];
           whereClause[require('sequelize').Op.or] = locationConditions;
@@ -972,7 +972,7 @@ const downloadResumes = async (req, res) => {
       }
       // Search functionality
       if (searchField && searchValue) {
-        whereClause[searchField] = { [require('sequelize').Op.iLike]: `%${searchValue}%` };
+        whereClause[searchField] = { [require('sequelize').Op.like]: `%${searchValue}%` };
       }
 
       students = await Student.findAll({

@@ -5,6 +5,25 @@ const StudentCourse = require('../models/StudentCourse');
 const Placement = require('../models/Placement');
 const Employee = require("../models/Employee");
 
+// ---- MariaDB replacements for the PostgreSQL date helpers used by the reports -------------------------------------
+const MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+// First day of the month of a DATE column, as a DATETIME at 00:00:00. mysql2/Sequelize read it back as a JS Date in UTC
+// (the connection timezone is +00:00), so the JSON is "YYYY-MM-01T00:00:00.000Z" - the same value the PostgreSQL
+// month-truncation returned. Sorts chronologically and can be used for GROUP BY / ORDER BY.
+const monthStart = (column) =>
+  Sequelize.cast(Sequelize.fn("DATE_FORMAT", Sequelize.col(column), "%Y-%m-01"), "DATETIME");
+
+// Month label such as "May 2025": three-letter English month + 4-digit year (same text as the PostgreSQL
+// Mon YYYY format). ELT keeps the names English whatever the server lc_time_names is set to.
+const monthLabel = (column) =>
+  Sequelize.fn(
+    "CONCAT",
+    Sequelize.fn("ELT", Sequelize.fn("MONTH", Sequelize.col(column)), ...MONTH_ABBR),
+    " ",
+    Sequelize.fn("DATE_FORMAT", Sequelize.col(column), "%Y")
+  );
+
 exports.getPlacedStudentsReport = async (req, res) => {
     try {
         const {
@@ -121,9 +140,9 @@ exports.getPlacedStudentsReport = async (req, res) => {
         const data = await StudentCourse.findAll({
             where: whereClause,
             attributes: [
-                [Sequelize.fn("DATE_TRUNC", "month", Sequelize.col("placementDate")), "month"],
+                [monthStart("placementDate"), "month"],
                 "Department",
-                [Sequelize.fn("COUNT", Sequelize.col("id")), "count"]
+                [Sequelize.cast(Sequelize.fn("COUNT", Sequelize.col("id")), "CHAR"), "count"]
             ],
             group: ["month", "Department"],
             order: [
@@ -185,7 +204,7 @@ exports.getAwaitingStudentsReport = async (req, res) => {
             attributes: [
                 "Department",
                 "branch",
-                [Sequelize.fn("COUNT", Sequelize.col("id")), "count"]
+                [Sequelize.cast(Sequelize.fn("COUNT", Sequelize.col("id")), "CHAR"), "count"]
             ],
             group: ["Department", "branch"]
         });
@@ -269,27 +288,19 @@ exports.getJobRequirementReport = async (req, res) => {
 
             attributes: [
                 [
-                    Sequelize.fn(
-                        "TO_CHAR",
-                        Sequelize.fn(
-                            "DATE_TRUNC",
-                            "month",
-                            Sequelize.col("createdDate")
-                        ),
-                        "Mon YYYY"
-                    ),
+                    monthLabel("createdDate"),
                     "month"
                 ],
 
                 // ✅ OPEN
                 [
                     Sequelize.literal(`
-                        COUNT(
+                        CAST(COUNT(
                             CASE
-                                WHEN "jobReqStatus" = 'Open'
+                                WHEN \`jobReqStatus\` = 'Open'
                                 THEN 1
                             END
-                        )
+                        ) AS CHAR)
                     `),
                     "Open"
                 ],
@@ -297,12 +308,12 @@ exports.getJobRequirementReport = async (req, res) => {
                 // ✅ CLOSED
                 [
                     Sequelize.literal(`
-                        COUNT(
+                        CAST(COUNT(
                             CASE
-                                WHEN "jobReqStatus" = 'Closed'
+                                WHEN \`jobReqStatus\` = 'Closed'
                                 THEN 1
                             END
-                        )
+                        ) AS CHAR)
                     `),
                     "Closed"
                 ],
@@ -310,12 +321,12 @@ exports.getJobRequirementReport = async (req, res) => {
                 // ✅ CANCELLED
                 [
                     Sequelize.literal(`
-                        COUNT(
+                        CAST(COUNT(
                             CASE
-                                WHEN "jobReqStatus" = 'Cancelled'
+                                WHEN \`jobReqStatus\` = 'Cancelled'
                                 THEN 1
                             END
-                        )
+                        ) AS CHAR)
                     `),
                     "Cancelled"
                 ],
@@ -323,40 +334,30 @@ exports.getJobRequirementReport = async (req, res) => {
                 // ✅ FREEZE
                 [
                     Sequelize.literal(`
-                        COUNT(
+                        CAST(COUNT(
                             CASE
-                                WHEN "jobReqStatus" = 'Freeze'
+                                WHEN \`jobReqStatus\` = 'Freeze'
                                 THEN 1
                             END
-                        )
+                        ) AS CHAR)
                     `),
                     "Freeze"
                 ],
 
                 // ✅ TOTAL COUNT
                 [
-                    Sequelize.literal(`
-                        COUNT(*)
-                    `),
+                    Sequelize.literal(`CAST(COUNT(*) AS CHAR)`),
                     "Total"
                 ]
             ],
 
             group: [
-                Sequelize.fn(
-                    "DATE_TRUNC",
-                    "month",
-                    Sequelize.col("createdDate")
-                )
+                monthStart("createdDate"), monthLabel("createdDate")
             ],
 
             order: [
                 [
-                    Sequelize.fn(
-                        "DATE_TRUNC",
-                        "month",
-                        Sequelize.col("createdDate")
-                    ),
+                    monthStart("createdDate"),
                     "ASC"
                 ]
             ],
@@ -412,15 +413,7 @@ exports.getJobRequirementDetails = async (req, res) => {
 
             whereClause[Op.and].push(
                 Sequelize.where(
-                    Sequelize.fn(
-                        "TO_CHAR",
-                        Sequelize.fn(
-                            "DATE_TRUNC",
-                            "month",
-                            Sequelize.col("createdDate")
-                        ),
-                        "Mon YYYY"
-                    ),
+                    Sequelize.fn("BINARY", monthLabel("createdDate")),
                     month
                 )
             );
@@ -702,15 +695,7 @@ exports.getPlacedStudentsDetails = async (req, res) => {
 
             whereClause[Op.and].push(
                 Sequelize.where(
-                    Sequelize.fn(
-                        "TO_CHAR",
-                        Sequelize.fn(
-                            "DATE_TRUNC",
-                            "month",
-                            Sequelize.col("placementDate")
-                        ),
-                        "Mon YYYY"
-                    ),
+                    Sequelize.fn("BINARY", monthLabel("placementDate")),
                     month
                 )
             );
@@ -740,6 +725,8 @@ exports.getPlacedStudentsDetails = async (req, res) => {
             ],
 
             order: [
+                // PostgreSQL sorts NULLs FIRST for DESC, MariaDB sorts them LAST: keep rows without a placementDate first, as before.
+                [Sequelize.literal("(placementDate IS NULL)"), "DESC"],
                 ["placementDate", "DESC"]
             ],
 
@@ -1025,15 +1012,7 @@ exports.getPlacedByReport = async (
                 attributes: [
 
                     [
-                        Sequelize.fn(
-                            "TO_CHAR",
-                            Sequelize.fn(
-                                "DATE_TRUNC",
-                                "month",
-                                Sequelize.col("placementDate")
-                            ),
-                            "Mon YYYY"
-                        ),
+                        monthLabel("placementDate"),
                         "month"
                     ],
 
@@ -1052,11 +1031,7 @@ exports.getPlacedByReport = async (
 
                 group: [
 
-                    Sequelize.fn(
-                        "DATE_TRUNC",
-                        "month",
-                        Sequelize.col("placementDate")
-                    ),
+                    monthStart("placementDate"), monthLabel("placementDate"),
 
                     "placedBy",
 
@@ -1068,9 +1043,7 @@ exports.getPlacedByReport = async (
                     ["placedBy", "ASC"],
 
                     [
-                        Sequelize.literal(
-                            `"count"`
-                        ),
+                        Sequelize.col("count"),
                         "DESC"
                     ]
                 ],

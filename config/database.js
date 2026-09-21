@@ -13,6 +13,9 @@ const sequelize = new Sequelize(
     dialect: 'mysql',
     logging: false,
 
+    // Explicit (this is also Sequelize's default): DATETIME values are read/written as UTC.
+    timezone: '+00:00',
+
     dialectOptions: {
       charset: 'utf8mb4'
     },
@@ -30,6 +33,9 @@ const sequelize = new Sequelize(
     }
   }
 );
+
+// Must be installed before any model is defined (models require this file).
+require('./mariadbCompat')(sequelize);
 
 async function testConnection() {
   try {

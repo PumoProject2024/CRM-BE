@@ -49,7 +49,7 @@ exports.getAllCourses = async (req, res) => {
     const whereClause = {};
     if (courseName) {
       whereClause.courseName = {
-        [Op.iLike]: `%${courseName}%`  // case-insensitive partial match
+        [Op.like]: `%${courseName}%`  // case-insensitive partial match
       };
     }
 
@@ -164,7 +164,7 @@ exports.getCoursesByDepartment = async (req, res) => {
     const courses = await CourseDetails.findAll({
       where: {
         Department: {
-          [Op.iLike]: Department.trim()
+          [Op.like]: Department.trim()
         }
       },
       attributes: ['courseName']
@@ -174,7 +174,7 @@ exports.getCoursesByDepartment = async (req, res) => {
     const techRecords = await Technology.findAll({
       where: {
         Department: {
-          [Op.iLike]: Department.trim()
+          [Op.like]: Department.trim()
         }
       },
       attributes: ['skillKnown']

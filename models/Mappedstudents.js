@@ -54,7 +54,7 @@ const MappedStudent = sequelize.define('MappedStudent', {
   },
 
   statusHistory: {
-    type: DataTypes.JSONB,
+    type: DataTypes.JSON,
     allowNull: true,
     defaultValue: [],
     comment: 'Array of {status, feedback, timestamp, updatedBy} objects to track status changes'

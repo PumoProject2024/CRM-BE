@@ -4,9 +4,9 @@ const sequelize = require('../config/database');
 
 async function runSeeders() {
   try {
-    // Sync database
-    await sequelize.sync();
-    
+    // The schema must already exist (created explicitly); only verify connectivity here.
+    await sequelize.authenticate();
+
     // Run seeders
     await seedCourseData();
     await seedLocationData();

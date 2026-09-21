@@ -1,6 +1,11 @@
 const { DataTypes } = require('sequelize');
 const sequelize = require('../config/database');
 
+// MariaDB/InnoDB limits the declared width of a row to 65,535 bytes (excluding TEXT/BLOB). With 93
+// VARCHAR(255) columns in utf8mb4 this table needed ~95 KB, so 35 free-text / history columns are TEXT.
+// TEXT is a strict superset of the previous VARCHAR(255): no existing value can be truncated.
+// Columns used for grouping, filtering, defaults or as keys deliberately remain VARCHAR(255).
+// Scores are DOUBLE (PostgreSQL FLOAT was 8-byte; MariaDB FLOAT is only 4-byte).
 const StudentCourse = sequelize.define('StudentCourse', {
   id: {
     type: DataTypes.INTEGER,
@@ -95,15 +100,15 @@ const StudentCourse = sequelize.define('StudentCourse', {
     }
   },
   projectTitle1: {
-    type: DataTypes.STRING,
+    type: DataTypes.TEXT,
     allowNull: true,
   },
   projectTitle2: {
-    type: DataTypes.STRING,
+    type: DataTypes.TEXT,
     allowNull: true,
   },
   projectTitle3: {
-    type: DataTypes.STRING,
+    type: DataTypes.TEXT,
     allowNull: true,
   },
   project1Status: {
@@ -140,9 +145,9 @@ const StudentCourse = sequelize.define('StudentCourse', {
     type: DataTypes.STRING,
     allowNull: true
   },
-  project1Score: { type: DataTypes.FLOAT, allowNull: true },
-  project2Score: { type: DataTypes.FLOAT, allowNull: true },
-  project3Score: { type: DataTypes.FLOAT, allowNull: true },
+  project1Score: { type: DataTypes.DOUBLE, allowNull: true },
+  project2Score: { type: DataTypes.DOUBLE, allowNull: true },
+  project3Score: { type: DataTypes.DOUBLE, allowNull: true },
   project1Feedback: {
     type: DataTypes.TEXT,
     allowNull: true
@@ -155,11 +160,11 @@ const StudentCourse = sequelize.define('StudentCourse', {
     type: DataTypes.TEXT,
     allowNull: true
   },
-  communicationScore: { type: DataTypes.FLOAT, allowNull: true },
-  technicalScore: { type: DataTypes.FLOAT, allowNull: true },
-  mockTest1Score: { type: DataTypes.FLOAT, allowNull: true },
-  mockTest2Score: { type: DataTypes.FLOAT, allowNull: true },
-  mockTest3Score: { type: DataTypes.FLOAT, allowNull: true },
+  communicationScore: { type: DataTypes.DOUBLE, allowNull: true },
+  technicalScore: { type: DataTypes.DOUBLE, allowNull: true },
+  mockTest1Score: { type: DataTypes.DOUBLE, allowNull: true },
+  mockTest2Score: { type: DataTypes.DOUBLE, allowNull: true },
+  mockTest3Score: { type: DataTypes.DOUBLE, allowNull: true },
   courseStartDate: { type: DataTypes.DATEONLY, allowNull: true },
   courseEndDate: { type: DataTypes.DATEONLY, allowNull: true },
   email_Id: { type: DataTypes.STRING, allowNull: true },
@@ -198,11 +203,11 @@ const StudentCourse = sequelize.define('StudentCourse', {
     allowNull: true,
   },
   skillSet: {
-    type: DataTypes.STRING,
+    type: DataTypes.TEXT,
     allowNull: true
   },
   knownSkill: {
-    type: DataTypes.STRING,
+    type: DataTypes.TEXT,
     allowNull: true
   },
   mentor: {
@@ -248,11 +253,11 @@ const StudentCourse = sequelize.define('StudentCourse', {
     comment: 'When skills were last updated'
   },
   technologyRemarks: {
-    type: DataTypes.STRING,
+    type: DataTypes.TEXT,
     allowNull: true,
   },
   communicationRemarks: {
-    type: DataTypes.STRING,
+    type: DataTypes.TEXT,
     allowNull: true,
   },
   mockInterview: {
@@ -260,45 +265,45 @@ const StudentCourse = sequelize.define('StudentCourse', {
     allowNull: true,
   },
   mockRemarks: {
-    type: DataTypes.STRING,
+    type: DataTypes.TEXT,
     allowNull: true,
   },
   tenthInstitution: {
-    type: DataTypes.STRING,
+    type: DataTypes.TEXT,
     allowNull: true
   },
   tenthDepartment: {
-    type: DataTypes.STRING,
+    type: DataTypes.TEXT,
     allowNull: true
   },
   tenthDegree: {
-    type: DataTypes.STRING,
+    type: DataTypes.TEXT,
     allowNull: true
   },
 
   twelfthInstitution: {
-    type: DataTypes.STRING,
+    type: DataTypes.TEXT,
     allowNull: true
   },
   twelfthDepartment: {
-    type: DataTypes.STRING,
+    type: DataTypes.TEXT,
     allowNull: true
   },
   twelfthDegree: {
-    type: DataTypes.STRING,
+    type: DataTypes.TEXT,
     allowNull: true
   },
 
   diplomaInstitution: {
-    type: DataTypes.STRING,
+    type: DataTypes.TEXT,
     allowNull: true
   },
   diplomaDepartment: {
-    type: DataTypes.STRING,
+    type: DataTypes.TEXT,
     allowNull: true
   },
   diplomaDegree: {
-    type: DataTypes.STRING,
+    type: DataTypes.TEXT,
     allowNull: true
   },
   diplomaPassout: {
@@ -311,15 +316,15 @@ const StudentCourse = sequelize.define('StudentCourse', {
   },
 
   ugInstitution: {
-    type: DataTypes.STRING,
+    type: DataTypes.TEXT,
     allowNull: true
   },
   ugDepartment: {
-    type: DataTypes.STRING,
+    type: DataTypes.TEXT,
     allowNull: true
   },
   ugDegree: {
-    type: DataTypes.STRING,
+    type: DataTypes.TEXT,
     allowNull: true
   },
   ugPassout: {
@@ -332,15 +337,15 @@ const StudentCourse = sequelize.define('StudentCourse', {
   },
 
   pgInstitution: {
-    type: DataTypes.STRING,
+    type: DataTypes.TEXT,
     allowNull: true
   },
   pgDepartment: {
-    type: DataTypes.STRING,
+    type: DataTypes.TEXT,
     allowNull: true
   },
   pgDegree: {
-    type: DataTypes.STRING,
+    type: DataTypes.TEXT,
     allowNull: true
   },
   pgPassout: {
@@ -357,7 +362,7 @@ const StudentCourse = sequelize.define('StudentCourse', {
     defaultValue: "Awaiting for placement"
   },
   placementRemarks: {
-    type: DataTypes.STRING,
+    type: DataTypes.TEXT,
     allowNull: true,
   },
   companyName: {
@@ -389,25 +394,25 @@ const StudentCourse = sequelize.define('StudentCourse', {
     allowNull: true,
   },
 
-  expCompanyName1: { type: DataTypes.STRING, allowNull: true },
+  expCompanyName1: { type: DataTypes.TEXT, allowNull: true },
   expStartDate1: { type: DataTypes.DATEONLY, allowNull: true },
   expEndDate1: { type: DataTypes.DATEONLY, allowNull: true },
   expRole1: { type: DataTypes.STRING, allowNull: true },
-  expTechnologies1: { type: DataTypes.STRING, allowNull: true },
+  expTechnologies1: { type: DataTypes.TEXT, allowNull: true },
   expCurrentlyWorking1: { type: DataTypes.BOOLEAN, allowNull: true },
 
-  expCompanyName2: { type: DataTypes.STRING, allowNull: true },
+  expCompanyName2: { type: DataTypes.TEXT, allowNull: true },
   expStartDate2: { type: DataTypes.DATEONLY, allowNull: true },
   expEndDate2: { type: DataTypes.DATEONLY, allowNull: true },
   expRole2: { type: DataTypes.STRING, allowNull: true },
-  expTechnologies2: { type: DataTypes.STRING, allowNull: true },
+  expTechnologies2: { type: DataTypes.TEXT, allowNull: true },
   expCurrentlyWorking2: { type: DataTypes.BOOLEAN, allowNull: true },
 
-  expCompanyName3: { type: DataTypes.STRING, allowNull: true },
+  expCompanyName3: { type: DataTypes.TEXT, allowNull: true },
   expStartDate3: { type: DataTypes.DATEONLY, allowNull: true },
   expEndDate3: { type: DataTypes.DATEONLY, allowNull: true },
   expRole3: { type: DataTypes.STRING, allowNull: true },
-  expTechnologies3: { type: DataTypes.STRING, allowNull: true },
+  expTechnologies3: { type: DataTypes.TEXT, allowNull: true },
   expCurrentlyWorking3: { type: DataTypes.BOOLEAN, allowNull: true },
 
   photoReview: {
@@ -415,11 +420,11 @@ const StudentCourse = sequelize.define('StudentCourse', {
     allowNull: true,
   },
   photoReviewLink: {
-    type: DataTypes.STRING,
+    type: DataTypes.TEXT,
     allowNull: true,
   },
   photoReviewReason: {
-    type: DataTypes.STRING,
+    type: DataTypes.TEXT,
     allowNull: true,
   },
   videoReview: {
@@ -427,11 +432,11 @@ const StudentCourse = sequelize.define('StudentCourse', {
     allowNull: true,
   },
   videoReviewLink: {
-    type: DataTypes.STRING,
+    type: DataTypes.TEXT,
     allowNull: true,
   },
   videoReviewReason: {
-    type: DataTypes.STRING,
+    type: DataTypes.TEXT,
     allowNull: true,
   },
   googleReview: {
@@ -447,7 +452,7 @@ const StudentCourse = sequelize.define('StudentCourse', {
     }
   },
   googleReviewReason: {
-    type: DataTypes.STRING,
+    type: DataTypes.TEXT,
     allowNull: true,
   },
   placementStatusChangedBy: {

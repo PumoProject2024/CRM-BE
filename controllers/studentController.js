@@ -84,23 +84,23 @@ exports.getAllStudents = async (req, res) => {
         ...(where[Op.and] || []),
         {
           [Op.or]: [
-            { name: { [Op.iLike]: `%${searchLower}%` } },
-            { email_Id: { [Op.iLike]: `%${searchLower}%` } },
-            { contactNo: { [Op.iLike]: `%${searchLower}%` } },
-            { department: { [Op.iLike]: `%${searchLower}%` } },
-            { enrollment_status: { [Op.iLike]: `%${searchLower}%` } },
-            { educationLevel: { [Op.iLike]: `%${searchLower}%` } },
-            { educationCourse: { [Op.iLike]: `%${searchLower}%` } },
-            { course: { [Op.iLike]: `%${searchLower}%` } },
-            { studentStatus: { [Op.iLike]: `%${searchLower}%` } },
-            { branch: { [Op.iLike]: `%${searchLower}%` } },
-            { adminName: { [Op.iLike]: `%${searchLower}%` } },
-            { studentRequirement: { [Op.iLike]: `%${searchLower}%` } },
-            { admin_feedback: { [Op.iLike]: `%${searchLower}%` } },
-            { classType: { [Op.iLike]: `%${searchLower}%` } },
-            { batch: { [Op.iLike]: `%${searchLower}%` } },
-            { learningMode: { [Op.iLike]: `%${searchLower}%` } },
-            { courseType: { [Op.iLike]: `%${searchLower}%` } },
+            { name: { [Op.like]: `%${searchLower}%` } },
+            { email_Id: { [Op.like]: `%${searchLower}%` } },
+            { contactNo: { [Op.like]: `%${searchLower}%` } },
+            { department: { [Op.like]: `%${searchLower}%` } },
+            { enrollment_status: { [Op.like]: `%${searchLower}%` } },
+            { educationLevel: { [Op.like]: `%${searchLower}%` } },
+            { educationCourse: { [Op.like]: `%${searchLower}%` } },
+            { course: { [Op.like]: `%${searchLower}%` } },
+            { studentStatus: { [Op.like]: `%${searchLower}%` } },
+            { branch: { [Op.like]: `%${searchLower}%` } },
+            { adminName: { [Op.like]: `%${searchLower}%` } },
+            { studentRequirement: { [Op.like]: `%${searchLower}%` } },
+            { admin_feedback: { [Op.like]: `%${searchLower}%` } },
+            { classType: { [Op.like]: `%${searchLower}%` } },
+            { batch: { [Op.like]: `%${searchLower}%` } },
+            { learningMode: { [Op.like]: `%${searchLower}%` } },
+            { courseType: { [Op.like]: `%${searchLower}%` } },
           ],
         },
       ];
@@ -236,9 +236,9 @@ exports.searchStudents = async (req, res) => {
     const students = await Student.findAll({
       where: {
         [Op.or]: [
-          { name: { [Op.iLike]: `%${query}%` } },
-          { email_Id: { [Op.iLike]: `%${query}%` } },
-          { contactNo: { [Op.iLike]: `%${query}%` } }
+          { name: { [Op.like]: `%${query}%` } },
+          { email_Id: { [Op.like]: `%${query}%` } },
+          { contactNo: { [Op.like]: `%${query}%` } }
         ]
       }
     });

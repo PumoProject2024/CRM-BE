@@ -198,26 +198,11 @@ const initializeDatabase = async () => {
         await sequelize.authenticate();
         console.log('Database connection established successfully.');
 
-        try {
-            await sequelize.sync({ alter: false });
-            console.log('All models synchronized successfully.');
-
-            await seedCourseData();
-            await seedLocationData();
-            console.log('Seeding completed successfully.');
-
-        } catch (error) {
-            if (error.name === 'SequelizeUnknownConstraintError' &&
-                error.constraint === 'invoices_studentId_fkey') {
-
-                console.log('Handling constraint error...');
-                const Invoice = require('./models/invoice');
-                await Invoice.sync({ force: true });
-                console.log('Invoice model re-synchronized successfully.');
-            } else {
-                throw error;
-            }
-        }
+        // Schema creation is explicit (reviewed SQL). The application never runs
+        // sequelize.sync() and never drops or recreates tables at startup.
+        await seedCourseData();
+        await seedLocationData();
+        console.log('Seeding completed successfully.');
     } catch (error) {
         console.error('Database connection error:', error);
         process.exit(1);

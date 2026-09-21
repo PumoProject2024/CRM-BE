@@ -120,9 +120,9 @@ const buildStudentFilters = (query) => {
         const arr = companyLocations.split(",").map(v => v.trim());
 
         const locConditions = [
-            { desiredlocation: { [Op.iLike]: "%No Constraint%" } },
+            { desiredlocation: { [Op.like]: "%No Constraint%" } },
             ...arr.map(loc => ({
-                desiredlocation: { [Op.iLike]: `%${loc}%` }
+                desiredlocation: { [Op.like]: `%${loc}%` }
             }))
         ];
 
@@ -137,12 +137,12 @@ const buildStudentFilters = (query) => {
     // ✅ Search
     if (searchField === "passedYear" && searchValue) {
         whereClause[Op.or] = [
-            { ugPassout: { [Op.iLike]: `%${searchValue}%` } },
-            { pgPassout: { [Op.iLike]: `%${searchValue}%` } }
+            { ugPassout: { [Op.like]: `%${searchValue}%` } },
+            { pgPassout: { [Op.like]: `%${searchValue}%` } }
         ];
     } else if (searchField && searchValue) {
         whereClause[searchField] = {
-            [Op.iLike]: `%${searchValue}%`
+            [Op.like]: `%${searchValue}%`
         };
     }
 

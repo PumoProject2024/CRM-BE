@@ -13,6 +13,23 @@ const { sendPlacementEscalationMail } = require("../utils/sendPlacementEscalatio
 
 const ExcelJS = require("exceljs");
 const sequelize = require("../config/database");
+const orderLikePostgres = require("../utils/orderLikePostgres");
+
+// Branch-visibility filter for placements (MariaDB). A placement is visible when allowedBranches mentions "all branches",
+// or when one of the user's (already lower-cased) branches is an element of the comma-separated allowedBranches list.
+// Same normalisation as the original PostgreSQL filter: strip "[" and "]", split on ",", trim spaces around each element,
+// lower-case, then compare exactly (utf8mb4_bin keeps the comparison accent/case exact after LOWER, like the original IN).
+// Branch values are escaped with sequelize.escape. NOTE: with an empty branch list the OR chain is left dangling, which is a
+// SQL syntax error - deliberately identical to the original behaviour (an empty IN () list was a syntax error too).
+const allowedBranchesCondition = (userBranches) => {
+  const elements = `LOWER(TRIM(REGEXP_REPLACE(REPLACE(REPLACE(allowedBranches, '[', ''), ']', ''), ' *, *', ','))) COLLATE utf8mb4_bin`;
+  return Sequelize.literal(`
+    (
+      LOWER(allowedBranches) LIKE '%all branches%'
+      OR ${userBranches.map(b => `FIND_IN_SET(${sequelize.escape(b)}, ${elements}) > 0`).join(" OR ")}
+    )
+  `);
+};
 
 exports.updatePlacement = async (req, res) => {
   try {
@@ -1095,7 +1112,7 @@ exports.getAllPlacements = async (req, res) => {
         );
       } else {
         whereClause[Op.and].push({
-          [searchField]: { [Op.iLike]: `%${searchValue}%` }
+          [searchField]: { [Op.like]: `%${searchValue}%` }
         });
       }
     }
@@ -1119,21 +1136,7 @@ exports.getAllPlacements = async (req, res) => {
     userBranches = userBranches.map(b => b.toLowerCase());
 
     whereClause[Op.and].push(
-      Sequelize.literal(`
-        (
-          LOWER("allowedBranches") LIKE '%all branches%'
-          OR EXISTS (
-            SELECT 1
-            FROM unnest(
-              string_to_array(
-                REPLACE(REPLACE("allowedBranches",'[',''),']',''),
-                ','
-              )
-            ) AS b
-            WHERE LOWER(TRIM(b)) IN (${userBranches.map(b => `'${b}'`).join(",")})
-          )
-        )
-      `)
+      allowedBranchesCondition(userBranches)
     );
 
     // =========================================================
@@ -1196,7 +1199,7 @@ exports.getAllPlacements = async (req, res) => {
 
     const { count, rows } = await Placement.findAndCountAll({
       where: whereClause,
-      order: [[sortField, sortDirection]],
+      order: orderLikePostgres(Placement, sortField, sortDirection),
       limit: pageSize,
       offset
     });
@@ -1279,7 +1282,7 @@ exports.downloadPlacementsExcel = async (req, res) => {
     if (experienceRequired) {
       whereClause[Op.and].push({
         experienceRequired: {
-          [Op.iLike]: `%${experienceRequired.trim()}%`
+          [Op.like]: `%${experienceRequired.trim()}%`
         }
       });
     }
@@ -1351,7 +1354,7 @@ exports.downloadPlacementsExcel = async (req, res) => {
       } else {
         whereClause[Op.and].push({
           [searchField]: {
-            [Op.iLike]: `%${searchValue}%`
+            [Op.like]: `%${searchValue}%`
           }
         });
       }
@@ -1382,21 +1385,7 @@ exports.downloadPlacementsExcel = async (req, res) => {
     userBranches = userBranches.map(b => b.toLowerCase());
 
     whereClause[Op.and].push(
-      Sequelize.literal(`
-    (
-      LOWER("allowedBranches") LIKE '%all branches%'
-      OR EXISTS (
-        SELECT 1
-        FROM unnest(
-          string_to_array(
-            REPLACE(REPLACE("allowedBranches",'[',''),']',''),
-            ','
-          )
-        ) AS b
-        WHERE LOWER(TRIM(b)) IN (${userBranches.map(b => `'${b}'`).join(",")})
-      )
-    )
-  `)
+      allowedBranchesCondition(userBranches)
     );
     if (req.user.role === "Trainer") {
       let trainerDepartments = [];
@@ -1437,7 +1426,7 @@ exports.downloadPlacementsExcel = async (req, res) => {
 
     const rows = await Placement.findAll({
       where: whereClause,
-      order: [[sortField, sortDirection]]
+      order: orderLikePostgres(Placement, sortField, sortDirection)
     });
 
     // -------- Excel Creation --------
@@ -1775,7 +1764,8 @@ exports.getJobViews = async (req, res) => {
 
       // ✅ JSON branch sorting (safe)
       order: [
-        [sequelize.literal(`COALESCE((branch::jsonb)->>0, '')`), 'ASC'],
+        [sequelize.literal(`CASE WHEN JSON_TYPE(branch) = 'ARRAY' AND JSON_TYPE(JSON_EXTRACT(branch, '$[0]')) <> 'NULL'
+                     THEN JSON_UNQUOTE(JSON_EXTRACT(branch, '$[0]')) ELSE '' END`), 'ASC'],
         ['viewedAt', 'DESC']
       ]
     });
